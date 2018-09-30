@@ -1,3 +1,6 @@
+"""
+Learn a Gaussian mixture on R^2 with a normalizing flow from a standard normal.
+"""
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn

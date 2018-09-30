@@ -3,7 +3,7 @@ import torch
 from torch.distributions import constraints
 
 from relie.flow import LocalDiffeoTransform
-from relie.utils.so3_tools import so3_exp, so3_log
+from relie.utils.so3_tools import so3_exp, so3_log, so3_vee
 
 
 class SO3ExpTransform(LocalDiffeoTransform):
@@ -23,7 +23,7 @@ class SO3ExpTransform(LocalDiffeoTransform):
         return so3_exp(x)
 
     def _inverse_set(self, y):
-        return self._xset(so3_log(y))
+        return self._xset(so3_vee(so3_log(y)))
 
     def _xset(self, x):
         x = x[None]

@@ -12,7 +12,7 @@ class SO3ExpTransform(LocalDiffeoTransform):
 
     event_dim = 1
 
-    def __init__(self, k_max=1):
+    def __init__(self, k_max=10):
         """
         :param k_max: Returns inverse set with k \in [-k_max, k_max]
         """

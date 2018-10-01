@@ -79,9 +79,10 @@ class Flow(nn.Module):
         self.d_residue = 2
         self.d_transform = 1
         self.nets = nn.ModuleList([
-            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 3)
+            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 4)
             for _ in range(n_layers)
         ])
+        self._set_params()
         r = list(range(3))
         self.permutations = [r[i:] + r[:i] for i in range(3)]
 
@@ -94,6 +95,15 @@ class Flow(nn.Module):
                 PermuteTransform(permutation),
             ])
         return ComposeTransform(transforms)
+
+    def _set_params(self):
+        """
+        Initialize coupling layers to be identity.
+        """
+        for net in self.nets:
+            last_module = list(net.modules())[-1]
+            last_module.weight.data = torch.zeros_like(last_module.weight)
+            last_module.bias.data = torch.tensor([0., 0.])
 
 
 intermediate_transform = ComposeTransform([
@@ -129,7 +139,7 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-flow_model = Flow(6, x_dims, 6)
+flow_model = Flow(6, x_dims, 9)
 model = FlowDistr(flow_model).to(device)
 optimizer = torch.optim.Adam(model.parameters())
 

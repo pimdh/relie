@@ -87,7 +87,7 @@ def so3_log(r):
 
 def so3_log_pi(r, theta):
     """
-    Logarith map of SO(3) for cases with theta close to pi.
+    Logarithm map of SO(3) for cases with theta close to pi.
     Note: inaccurate for theta around 0.
     :param r: group element of shape (..., 3, 3)
     :param theta: rotation angle
@@ -105,11 +105,10 @@ def so3_log_pi(r, theta):
     x_3 = torch.sqrt((-q_1 - q_2 + q_3) / 2)
     x = torch.stack([x_1, x_2, x_3], -1)
 
-    # We know components up to a sign
+    # We know components up to a sign, search for correct one
     signs = zero_one_outer_product(3, dtype=x.dtype, device=x.device) * 2 - 1
-    x_stack = torch.stack([s * x for s in signs])
+    x_stack = signs.view(8, *[1]*(x.dim()-1), 3) * x[None]
     with torch.no_grad():
-        # TODO: Vectorize
         r_stack = so3_exp(x_stack)
         diff = (r[None]-r_stack).pow(2).sum(-1).sum(-1)
         selector = torch.argmin(diff, dim=0)

@@ -13,6 +13,7 @@ Data generation:
 - From uniform prior, we sample g \in G
 - We act: v_g = g(v)
 """
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -23,19 +24,20 @@ from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
 from relie.flow import LocalDiffeoTransformedDistribution as LDTD
-from relie.lie_exp import SO3ExpTransform
+from relie.lie_distr import SO3ExpTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
-from relie.utils.so3_tools import so3_exp, so3_matrix_to_eazyz, block_wigner_matrix_multiply
+from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply
 from relie.utils.modules import MLP
 
 device = torch.device('cpu')
 
 # Prior distribution p(G)
-generation_alg_distr = Normal(torch.tensor([0., .5, -.5,]), torch.tensor([0.5, .1, 1.]))
-generation_group_distr = LDTD(generation_alg_distr, SO3ExpTransform())
+# generation_alg_distr = Normal(torch.tensor([0., .5, -.5,]), torch.tensor([0.5, .1, 1.]))
+# generation_group_distr = LDTD(generation_alg_distr, SO3ExpTransform())
+generation_group_distr = SO3Prior(dtype=torch.double)
 
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
-noise_alg_distr = Normal(torch.tensor([0., 0., 0.,]), torch.tensor([.1, .1, .1]))
+noise_alg_distr = Normal(torch.tensor([0., 0., 0.,]).double(), torch.tensor([.1, .1, .1]).double())
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
@@ -54,7 +56,7 @@ max_rep_degree = 3
 rep_copies = 1
 x_dims = (max_rep_degree+1) ** 2 * rep_copies
 x_zero = torch.randn((max_rep_degree+1) ** 2, rep_copies)
-x_data = block_wigner_matrix_multiply(angles, x_zero.expand(num_samples, -1, -1), max_rep_degree)
+x_data = block_wigner_matrix_multiply(angles.float(), x_zero.expand(num_samples, -1, -1), max_rep_degree)
 
 dataset = TensorDataset(x_data, group_data_noised, group_data)
 loader = TensorLoader(dataset, 64, True)
@@ -65,7 +67,7 @@ class ConditionalGaussianModel(nn.Module):
     """Models p(G|X) as exp^*(N(mu(x),sigma(X)))"""
     def __init__(self):
         super().__init__()
-        self.module = MLP(x_dims, 2 * 3, 20, 2)
+        self.module = MLP(x_dims, 2 * 3, 100, 5)
 
         # Set intital output at exp^*(N(0,1))
         last_module = list(self.module.modules())[-1]
@@ -73,19 +75,21 @@ class ConditionalGaussianModel(nn.Module):
         last_module.bias.data = torch.tensor([0., 0., 0., 1., 1., 1.])
 
     def distr(self, x):
-        out = self.module(x.view(x.shape[0], -1))
+        out = self.module(x.view(x.shape[0], -1)).double()
         loc, scale = out[:, :3], out[:, 3:]
         alg_distr = Normal(loc, scale)
         return LDTD(alg_distr, SO3ExpTransform())
 
     def forward(self, x, g):
-        return -self.distr(x).log_prob(g)
+        with torch.autograd.detect_anomaly():
+            return -self.distr(x).log_prob(g)
 
 
 model = ConditionalGaussianModel()
 optimizer = torch.optim.Adam(model.parameters())
 
 
+losses = []
 for it in range(10000):
     x_batch, g_batch, _ = next(loader_iter)
     loss = model.forward(x_batch, g_batch).mean()
@@ -93,9 +97,10 @@ for it in range(10000):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    losses.append(loss.item())
 
     if it % 1000 == 0:
-        print(f"Loss: {loss.item():.4f}. Global minimum: {target_entropy.item():.4f}")
+        print(f"Loss: {np.mean(losses[-1000:]):.4f}. Global minimum: {target_entropy.item():.4f}")
 
 
 # %%
@@ -107,7 +112,7 @@ viz_data = []
 for _ in range(num_means):
     mean = generation_group_distr.sample((1,))[0]
     x = block_wigner_matrix_multiply(
-        so3_matrix_to_eazyz(mean[None]), x_zero[None], max_rep_degree)
+        so3_matrix_to_eazyz(mean[None].float()), x_zero[None], max_rep_degree)
     noise_samples = noise_group_distr.sample((num_noise_samples,))
     samples = (noise_samples @ mean[None]).view(num_noise_samples, 9)
 

@@ -7,7 +7,7 @@ from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
 from relie.flow import LocalDiffeoTransformedDistribution
-from relie.lie_exp import SO3ExpTransform
+from relie.lie_distr import SO3ExpTransform
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_exp
 
@@ -15,7 +15,7 @@ from relie.utils.so3_tools import so3_exp
 device = torch.device('cpu')
 
 
-target_alg_distr = Normal(torch.tensor([0., .5, -.5,]), torch.tensor([1.5, .1, 1.]))
+target_alg_distr = Normal(torch.tensor([0., .5, -.5,]).double(), torch.tensor([1.5, .1, 1.]).double())
 target_group_distr = LocalDiffeoTransformedDistribution(
     target_alg_distr, SO3ExpTransform(k_max=10))
 data = so3_exp(target_alg_distr.sample((10000,)))
@@ -25,8 +25,8 @@ dataset = TensorDataset(data)
 loader = TensorLoader(dataset, 64, True)
 loader_iter = cycle(loader)
 
-loc = nn.Parameter(torch.zeros(3))
-scale = nn.Parameter(torch.ones(3))
+loc = nn.Parameter(torch.zeros(3).double())
+scale = nn.Parameter(torch.ones(3).double())
 optimizer = torch.optim.Adam([loc, scale])
 
 transform = SO3ExpTransform(k_max=10)

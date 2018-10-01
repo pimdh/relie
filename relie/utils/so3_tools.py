@@ -42,6 +42,7 @@ def so3_exp(v):
     :param v: algebra vector of shape (..., 3)
     :return: group element of shape (..., 3, 3)
     """
+    assert v.dtype == torch.double
     theta = v.norm(p=2, dim=-1, keepdim=True)
     # k = so3_hat(v / theta)
 
@@ -63,8 +64,7 @@ def so3_log(r):
 
     Uses https://en.wikipedia.org/wiki/Rotation_group_SO(3)#Logarithm_map
     """
-    org_dtype = r.dtype
-    r = r.double()
+    assert r.dtype == torch.double
     anti_sym = .5 * (r - r.transpose(-1, -2))
     cos_theta = .5 * (batch_trace(r)[..., None, None] - 1)
     cos_theta = cos_theta.clamp(-1, 1)  # Ensure we get a correct angle
@@ -78,11 +78,11 @@ def so3_log(r):
     log = ratio * anti_sym
 
     # Separately handle theta close to pi
-    mask = (cos_theta[..., 0, 0].abs() > .99).nonzero()[:, 0]
+    mask = (cos_theta[..., 0, 0].abs() > .99).nonzero()
     if mask.numel():
-        log[mask] = so3_log_pi(r[mask], theta[mask])
+        log[mask[:, 0]] = so3_log_pi(r[mask[:, 0]], theta[mask[:, 0]])
 
-    return log.to(org_dtype)
+    return log
 
 
 def so3_log_pi(r, theta):

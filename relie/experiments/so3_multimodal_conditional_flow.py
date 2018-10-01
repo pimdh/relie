@@ -23,10 +23,10 @@ from sklearn.decomposition import PCA
 
 import torch
 import torch.nn as nn
-from torch.distributions import Normal, ComposeTransform, SigmoidTransform, AffineTransform
+from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform
+from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform
 from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply, so3_exp
@@ -53,7 +53,25 @@ group_data_noised = noise_samples @ group_data
 max_rep_degree = 3
 rep_copies = 1
 x_dims = (max_rep_degree + 1)**2 * rep_copies
-x_zero = torch.randn((max_rep_degree + 1)**2, rep_copies, device=device)
+# x_zero = torch.randn((max_rep_degree + 1)**2, rep_copies, device=device)
+x_zero = [
+    0.9749450087547302,
+    1.320214033126831,
+    2.7400097846984863,
+    0.6298772692680359,
+    0.8593451380729675,
+    0.6799159646034241,
+    -0.4878562390804291,
+    1.2094298601150513,
+    0.009278437122702599,
+    -1.52178156375885,
+    1.634827971458435,
+    -1.2686760425567627,
+    1.8586041927337646,
+    1.0522747039794922,
+    -0.7130511403083801,
+    0.3419789671897888]
+x_zero = torch.tensor(x_zero, device=device)[:, None]
 
 # Make symmetrical
 symmetry_group = so3_exp(
@@ -81,7 +99,7 @@ class Flow(nn.Module):
         self.d_residue = 1
         self.d_transform = 2
         self.nets = nn.ModuleList([
-            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 3)
+            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 2)
             for _ in range(n_layers)
         ])
         self._set_params()
@@ -108,10 +126,10 @@ class Flow(nn.Module):
             last_module.bias.data = torch.zeros_like(last_module.bias)
 
 
+algebra_support_radius = np.pi * 1.1
+
 intermediate_transform = ComposeTransform([
-    SigmoidTransform(1),  # (-inf, inf)->(0, 1)
-    AffineTransform(-2 * np.pi, 4 * np.pi,
-                    cache_size=1),  # (0, 1)->(-2pi, 2pi)
+    RadialTanhTransform(algebra_support_radius),
     ToTransform(dict(dtype=torch.float32), dict(dtype=torch.float64))
 ])
 
@@ -127,7 +145,7 @@ class FlowDistr(nn.Module):
         transforms = [
             self.flow(x).inv,
             intermediate_transform,
-            SO3ExpCompactTransform(),
+            SO3ExpCompactTransform(algebra_support_radius),
         ]
         return transforms
 
@@ -146,7 +164,8 @@ model = FlowDistr(flow_model).to(device)
 optimizer = torch.optim.Adam(model.parameters())
 
 losses = []
-for it in range(2000000):
+num_its = 5000
+for it in range(num_its):
     x_batch, g_batch, _ = next(loader_iter)
     x_batch = x_batch.view(-1, x_dims)
     loss = model.forward(x_batch, g_batch).mean()
@@ -159,24 +178,29 @@ for it in range(2000000):
         print(f"Loss: {np.mean(losses[-1000:]):.4f}.")
 
 
-path = os.path.join('models', f'so3-multimodal-{int(time())}.pkl')
-torch.save(model.state_dict(), path)
-print(f"Model saved to {path}")
+if num_its > 0:
+    path = os.path.join('models', f'so3-multimodal-{int(time())}.pkl')
+    torch.save(model.state_dict(), path)
+    print(f"Model saved to {path}")
 
 # %%
+
+# model.load_state_dict(torch.load('models/so3-multimodal-1538424738.pkl'))
 num_noise_samples = 1000
 g_zero = generation_group_distr.sample((1,))[0]
 g_subgroup = symmetry_group @ g_zero[None]
+# g_subgroup = g_zero[None]
 x = block_wigner_matrix_multiply(
     so3_matrix_to_eazyz(g_zero[None].float()), x_zero[None], max_rep_degree)
 
 inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
 samples = inferred_distr.sample((num_noise_samples,)).view(num_noise_samples, 9)
-pca = PCA(3).fit(g_subgroup.view(4, 9))
+# pca = PCA(3).fit(g_subgroup.view(4, 9))
+pca = PCA(3).fit(samples)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.5)
-ax.scatter(*pca.transform(g_subgroup.view(4, 9)).T, label="Ground truth", s=50)
+ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.2)
+ax.scatter(*pca.transform(g_subgroup.view(-1, 9)).T, label="Ground truth", s=100, alpha=1)
 plt.legend()
 plt.show()

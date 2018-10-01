@@ -47,11 +47,12 @@ class SO3ExpCompactTransform(LocalDiffeoTransform):
 
     event_dim = 1
 
-    def __init__(self):
+    def __init__(self, support_radius=2*math.pi):
         """
-        :param k_max: Returns inverse set with k \in [-k_max, k_max]
+        :param support_radius: radius of inverse set.
         """
         super().__init__()
+        self.support_radius = support_radius
 
     def _call(self, x):
         return so3_exp(x)
@@ -62,7 +63,7 @@ class SO3ExpCompactTransform(LocalDiffeoTransform):
     def _xset(self, x):
         xset = so3_xset(x, 1)
         norms = xset.norm(dim=-1)
-        mask = norms < 2 * math.pi
+        mask = norms < self.support_radius
         xset.masked_fill_(1-mask[..., None], 0)
         return xset, mask
 

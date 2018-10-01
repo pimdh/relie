@@ -1,11 +1,10 @@
 """
 We have a dataset (x, G) for images x and orientations G:
-We learn a map  f:  X x R^d -> R^d, such that for any x, f_x  : R^d -> R^d is invertible.
 
 Then we do MLE:
 \max_f  E_{(x,G)}  [ \log p(G|x) ]
 where
-\log p(G|x) = \log \sum_{g \in Log(G)} p_0(f(x, g)) + change of variables
+\log p(G|x) = \log \sum_{g \in Log(G)} N(g|mu(x), sigma(x))
 for some prior  p_0
 
 Data generation:
@@ -20,6 +19,7 @@ from sklearn.decomposition import PCA
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
@@ -46,8 +46,7 @@ noise_samples = noise_group_distr.sample((num_samples,))
 group_data = generation_group_distr.sample((num_samples,))
 group_data_noised = noise_samples @ group_data
 
-
-# Find global optimum liklihood
+# Find global optimum liklihood (due to left-invariance this is correct)
 target_entropy = -noise_group_distr.log_prob(noise_samples).mean()
 
 # Create transformed data
@@ -67,7 +66,7 @@ class ConditionalGaussianModel(nn.Module):
     """Models p(G|X) as exp^*(N(mu(x),sigma(X)))"""
     def __init__(self):
         super().__init__()
-        self.module = MLP(x_dims, 2 * 3, 100, 5)
+        self.module = MLP(x_dims, 2 * 3, 50, 5)
 
         # Set intital output at exp^*(N(0,1))
         last_module = list(self.module.modules())[-1]
@@ -76,13 +75,14 @@ class ConditionalGaussianModel(nn.Module):
 
     def distr(self, x):
         out = self.module(x.view(x.shape[0], -1)).double()
-        loc, scale = out[:, :3], out[:, 3:]
-        alg_distr = Normal(loc, scale)
+        loc, pre_scale = out[:, :3], out[:, 3:]
+        alg_distr = Normal(loc, F.softplus(pre_scale))
         return LDTD(alg_distr, SO3ExpTransform())
 
     def forward(self, x, g):
-        with torch.autograd.detect_anomaly():
-            return -self.distr(x).log_prob(g)
+        log_prob = self.distr(x).log_prob(g)
+        assert torch.isnan(log_prob).sum() == 0
+        return -log_prob
 
 
 model = ConditionalGaussianModel()
@@ -90,7 +90,7 @@ optimizer = torch.optim.Adam(model.parameters())
 
 
 losses = []
-for it in range(10000):
+for it in range(50000):
     x_batch, g_batch, _ = next(loader_iter)
     loss = model.forward(x_batch, g_batch).mean()
 

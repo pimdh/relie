@@ -22,7 +22,7 @@ class PermuteTransform(Transform):
     def _call(self, x):
         return x[..., self.permutation]
 
-    def _inv_call(self, y):
+    def _inverse(self, y):
         return y[..., self.inv_permutation]
 
     def log_abs_det_jacobian(self, x, y):

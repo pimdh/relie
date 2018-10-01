@@ -71,3 +71,9 @@ def test_so3_log_pi():
     r = so3_exp(x)
     x_recon = so3_vee(so3_log_pi(r, theta))
     assert_array_almost_equal(x, x_recon, 4)
+
+
+def test_so3_inv():
+    rs = quaternions_to_so3_matrix(random_quaternions(1000, dtype=torch.double))
+    for r in rs:
+        assert_array_almost_equal(so3_inv(r), r.inverse())

@@ -99,7 +99,7 @@ def se3_log(r):
     
     theta = so3_vee(so3_alg).norm(p=2, dim=-1, keepdim=True)
     
-    eye = torch.eye(3, device=v.device, dtype=v.dtype)
+    eye = torch.eye(3, device=r.device, dtype=r.dtype)
     Vinv = eye + so3_alg/2 \
         + ((1 - theta*torch.sin(theta)/(2-2*torch.cos(theta)))/theta**2)[..., None]*(so3_alg@so3_alg)
     

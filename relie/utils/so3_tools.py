@@ -105,14 +105,23 @@ def so3_log_pi(r, theta):
     x_3 = torch.sqrt((-q_1 - q_2 + q_3) / 2)
     x = torch.stack([x_1, x_2, x_3], -1)
 
+    # Flatten batch dim
+    batch_shape = x.shape[:-1]
+    x = x.view(-1, 3)
+    r = r.view(-1, 3, 3)
+
     # We know components up to a sign, search for correct one
     signs = zero_one_outer_product(3, dtype=x.dtype, device=x.device) * 2 - 1
-    x_stack = signs.view(8, *[1]*(x.dim()-1), 3) * x[None]
+    x_stack = signs.view(8, 1, 3) * x[None]
     with torch.no_grad():
         r_stack = so3_exp(x_stack)
         diff = (r[None]-r_stack).pow(2).sum(-1).sum(-1)
         selector = torch.argmin(diff, dim=0)
+    print(x_stack.shape, selector.shape)
     x = x_stack[selector, torch.arange(len(selector))]
+
+    # Restore shape
+    x = x.view(*batch_shape, 3)
 
     return so3_hat(x)
 
@@ -307,3 +316,7 @@ def random_quaternions(n, dtype=torch.float32, device=None):
         torch.sqrt(u1) * torch.sin(2 * math.pi * u3),
         torch.sqrt(u1) * torch.cos(2 * math.pi * u3),
     ), 1)
+
+
+def so3_inv(el):
+    return el.transpose(-2, -1)

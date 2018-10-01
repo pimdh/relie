@@ -39,7 +39,7 @@ def assert_reconstruction(x, x_recon):
     assert_array_almost_equal(diff, torch.zeros_like(diff))
 
     # Test xset
-    xset = so3_xset(x, 3)
+    xset = so3_xset(x, 1)
     diff = (xset - x_recon[None]).abs().sum(2).min(dim=0)[0]
     assert_array_almost_equal(diff, torch.zeros_like(diff), 5)
 
@@ -61,11 +61,6 @@ def test_regular_region():
     r = so3_exp(x)
     x_recon = so3_vee(so3_log(r))
     assert_reconstruction(x, x_recon)
-
-    xset = so3_xset(x, 2)
-
-    diff = (xset - x_recon[None]).abs().sum(2).min(dim=0)[0]
-    assert_array_almost_equal(diff, torch.zeros_like(diff), 4)
 
 
 def test_so3_log_pi():

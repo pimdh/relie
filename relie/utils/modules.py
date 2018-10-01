@@ -1,23 +1,29 @@
 import torch
 import torch.nn as nn
-from torch import nn as nn
 from torch.distributions import Transform
 
 
-class MLP(nn.Sequential):
+class MLP(nn.Module):
     """Helper module to create MLPs."""
     def __init__(self, input_dims, output_dims, hidden_dims,
-                 num_layers=1, activation=nn.ReLU):
+                 num_layers=1, activation=nn.ReLU, batch_norm=False):
+        super().__init__()
         if num_layers == 0:
-            super().__init__(nn.Linear(input_dims, output_dims))
+            self.module = nn.Linear(input_dims, output_dims)
         else:
-            super().__init__(
-                nn.Linear(input_dims, hidden_dims),
-                activation(),
-                *[l for _ in range(num_layers-1)
-                  for l in [nn.Linear(hidden_dims, hidden_dims), activation()]],
-                nn.Linear(hidden_dims, output_dims)
-            )
+            dims = [input_dims, *[hidden_dims]*num_layers, output_dims]
+            modules = []
+            for l, (d_in, d_out) in enumerate(zip(dims[:-1], dims[1:])):
+                modules.append(nn.Linear(d_in, d_out))
+
+                if l < num_layers:
+                    if batch_norm:
+                        modules.append(nn.BatchNorm1d(d_out))
+                    modules.append(activation())
+            self.module = nn.Sequential(*modules)
+
+    def forward(self, x):
+        return self.module(x)
 
 
 class ConditionalModule(nn.Module):

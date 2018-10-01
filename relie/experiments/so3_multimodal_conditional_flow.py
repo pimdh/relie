@@ -14,6 +14,8 @@ Data generation:
 - From uniform prior, we sample g \in G
 - We act: v_g = g(v)
 """
+import os
+from time import time
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
@@ -42,7 +44,7 @@ noise_alg_distr = Normal(
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
-num_samples = 10000
+num_samples = 100000
 noise_samples = noise_group_distr.sample((num_samples, ))
 group_data = generation_group_distr.sample((num_samples, ))
 group_data_noised = noise_samples @ group_data
@@ -76,10 +78,10 @@ class Flow(nn.Module):
     def __init__(self, d, d_conditional, n_layers):
         super().__init__()
         self.d = d
-        self.d_residue = 2
-        self.d_transform = 1
+        self.d_residue = 1
+        self.d_transform = 2
         self.nets = nn.ModuleList([
-            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 4)
+            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 3)
             for _ in range(n_layers)
         ])
         self._set_params()
@@ -91,7 +93,7 @@ class Flow(nn.Module):
         for i, (net, permutation) in enumerate(
                 zip(self.nets, cycle(self.permutations))):
             transforms.extend([
-                CouplingTransform(2, ConditionalModule(net, x)),
+                CouplingTransform(self.d_residue, ConditionalModule(net, x)),
                 PermuteTransform(permutation),
             ])
         return ComposeTransform(transforms)
@@ -103,7 +105,7 @@ class Flow(nn.Module):
         for net in self.nets:
             last_module = list(net.modules())[-1]
             last_module.weight.data = torch.zeros_like(last_module.weight)
-            last_module.bias.data = torch.tensor([0., 0.])
+            last_module.bias.data = torch.zeros_like(last_module.bias)
 
 
 intermediate_transform = ComposeTransform([
@@ -139,12 +141,12 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-flow_model = Flow(6, x_dims, 9)
+flow_model = Flow(6, x_dims, 4)
 model = FlowDistr(flow_model).to(device)
 optimizer = torch.optim.Adam(model.parameters())
 
 losses = []
-for it in range(20000):
+for it in range(2000000):
     x_batch, g_batch, _ = next(loader_iter)
     x_batch = x_batch.view(-1, x_dims)
     loss = model.forward(x_batch, g_batch).mean()
@@ -155,6 +157,11 @@ for it in range(20000):
 
     if it % 1000 == 0:
         print(f"Loss: {np.mean(losses[-1000:]):.4f}.")
+
+
+path = os.path.join('models', f'so3-multimodal-{int(time())}.pkl')
+torch.save(model.state_dict(), path)
+print(f"Model saved to {path}")
 
 # %%
 num_noise_samples = 1000

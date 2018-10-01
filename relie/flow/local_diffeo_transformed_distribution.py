@@ -106,5 +106,5 @@ class LocalDiffeoTransformedDistribution(Distribution):
             terms = torch.where(
                 mask,
                 log_prob.float() + self._log_prob(xset, transforms).float(),
-                torch.tensor([float('-inf')]))
+                torch.tensor([float('-inf')], device=log_prob.device))
             return torch.logsumexp(terms, dim=0)

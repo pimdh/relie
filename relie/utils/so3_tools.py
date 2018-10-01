@@ -127,7 +127,7 @@ def so3_xset(x, k_max):
     x = x[None]
     x_norm = x.norm(dim=-1, keepdim=True)
     shape = [-1, *[1]*(x.dim()-1)]
-    k_range = torch.arange(-k_max, k_max+1, dtype=x.dtype).view(shape)
+    k_range = torch.arange(-k_max, k_max+1, dtype=x.dtype, device=x.device).view(shape)
     return x / x_norm * (x_norm + 2 * math.pi * k_range)
 
 

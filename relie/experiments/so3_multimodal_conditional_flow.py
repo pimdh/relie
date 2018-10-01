@@ -30,15 +30,15 @@ from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply, so3_exp
 from relie.utils.modules import MLP, ConditionalModule, ToTransform
 
-device = torch.device('cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # Prior distribution p(G)
-generation_group_distr = SO3Prior(dtype=torch.double)
+generation_group_distr = SO3Prior(dtype=torch.double, device=device)
 
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
 noise_alg_distr = Normal(
-    torch.zeros(3).double(),
-    torch.full((3, ), .1).double())
+    torch.zeros(3).double().to(device),
+    torch.full((3, ), .1).double().to(device))
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
@@ -51,11 +51,11 @@ group_data_noised = noise_samples @ group_data
 max_rep_degree = 3
 rep_copies = 1
 x_dims = (max_rep_degree + 1)**2 * rep_copies
-x_zero = torch.randn((max_rep_degree + 1)**2, rep_copies)
+x_zero = torch.randn((max_rep_degree + 1)**2, rep_copies, device=device)
 
 # Make symmetrical
 symmetry_group = so3_exp(
-    torch.tensor([[np.pi / 2 * i, 0, 0] for i in range(4)]).double())
+    torch.tensor([[np.pi / 2 * i, 0, 0] for i in range(4)], device=device).double())
 x_data = block_wigner_matrix_multiply(
     so3_matrix_to_eazyz(symmetry_group).float(), x_zero.expand(4, -1, -1),
     max_rep_degree)
@@ -129,8 +129,8 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-flow_model = Flow(6, x_dims, 4)
-model = FlowDistr(flow_model)
+flow_model = Flow(6, x_dims, 6)
+model = FlowDistr(flow_model).to(device)
 optimizer = torch.optim.Adam(model.parameters())
 
 losses = []

@@ -138,8 +138,12 @@ def so3_log_abs_det_jacobian(x):
     :return: Tensor of shape (..., 3)
     """
     x_norm = x.double().norm(dim=-1)
-    j = torch.log(2 - 2 * torch.cos(x_norm)) - torch.log(x_norm ** 2)
-    return j.to(x.dtype)
+    ratio = (2 - 2 * torch.cos(x_norm)) / x_norm ** 2
+
+    # Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
+    mask = x_norm < 1E-10
+    ratio.masked_scatter_(mask, 1 - x_norm[mask] ** 2 / 12)
+    return torch.log(ratio).to(x.dtype)
 
 
 def so3_matrix_to_quaternions(r):

@@ -117,7 +117,6 @@ def so3_log_pi(r, theta):
         r_stack = so3_exp(x_stack)
         diff = (r[None]-r_stack).pow(2).sum(-1).sum(-1)
         selector = torch.argmin(diff, dim=0)
-    print(x_stack.shape, selector.shape)
     x = x_stack[selector, torch.arange(len(selector))]
 
     # Restore shape

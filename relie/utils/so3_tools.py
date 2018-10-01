@@ -1,6 +1,6 @@
 import math
 import torch
-from relie.utils.numerical import batch_trace
+from relie.utils.numerical import batch_trace, zero_one_outer_product
 
 
 def so3_hat(v):
@@ -42,8 +42,13 @@ def so3_exp(v):
     :param v: algebra vector of shape (..., 3)
     :return: group element of shape (..., 3, 3)
     """
+    assert v.dtype == torch.double
     theta = v.norm(p=2, dim=-1, keepdim=True)
-    k = so3_hat(v / theta)
+    # k = so3_hat(v / theta)
+
+    v_normed = v / theta
+    v_normed[theta[..., 0] < 1E-20] = 0
+    k = so3_hat(v_normed)
 
     eye = torch.eye(3, device=v.device, dtype=v.dtype)
     r = eye + torch.sin(theta)[..., None]*k \
@@ -59,9 +64,86 @@ def so3_log(r):
 
     Uses https://en.wikipedia.org/wiki/Rotation_group_SO(3)#Logarithm_map
     """
+    assert r.dtype == torch.double
     anti_sym = .5 * (r - r.transpose(-1, -2))
-    theta = torch.acos(.5 * (batch_trace(r)[..., None, None] - 1))
-    return theta / torch.sin(theta) * anti_sym
+    cos_theta = .5 * (batch_trace(r)[..., None, None] - 1)
+    cos_theta = cos_theta.clamp(-1, 1)  # Ensure we get a correct angle
+    theta = torch.acos(cos_theta)
+    ratio = theta / torch.sin(theta)
+
+    # x/sin(x) -> 1 + x^2/6 as x->0
+    mask = (theta[..., 0, 0] < 1E-20).nonzero()
+    ratio[mask] = 1 + theta[mask] ** 2 / 6
+
+    log = ratio * anti_sym
+
+    # Separately handle theta close to pi
+    mask = (cos_theta[..., 0, 0].abs() > 1-1E-5).nonzero()
+    if mask.numel():
+        log[mask[:, 0]] = so3_log_pi(r[mask[:, 0]], theta[mask[:, 0]])
+
+    return log
+
+
+def so3_log_pi(r, theta):
+    """
+    Logarithm map of SO(3) for cases with theta close to pi.
+    Note: inaccurate for theta around 0.
+    :param r: group element of shape (..., 3, 3)
+    :param theta: rotation angle
+    :return: Algebra element in matrix basis of shape (..., 3, 3)
+    """
+    sym = .5 * (r + r.transpose(-1, -2))
+    eye = torch.eye(3, device=r.device, dtype=r.dtype).expand_as(sym)
+    z = theta ** 2 / (1 - torch.cos(theta)) * (sym - eye)
+
+    q_1 = z[..., 0, 0]
+    q_2 = z[..., 1, 1]
+    q_3 = z[..., 2, 2]
+    x_1 = torch.sqrt((q_1 - q_2 - q_3) / 2)
+    x_2 = torch.sqrt((-q_1 + q_2 - q_3) / 2)
+    x_3 = torch.sqrt((-q_1 - q_2 + q_3) / 2)
+    x = torch.stack([x_1, x_2, x_3], -1)
+
+    # We know components up to a sign, search for correct one
+    signs = zero_one_outer_product(3, dtype=x.dtype, device=x.device) * 2 - 1
+    x_stack = signs.view(8, *[1]*(x.dim()-1), 3) * x[None]
+    with torch.no_grad():
+        r_stack = so3_exp(x_stack)
+        diff = (r[None]-r_stack).pow(2).sum(-1).sum(-1)
+        selector = torch.argmin(diff, dim=0)
+    x = x_stack[selector, torch.arange(len(selector))]
+
+    return so3_hat(x)
+
+
+def so3_xset(x, k_max):
+    """
+    Return set of x's that have same image as exp(x).
+    :param x: Tensor of shape (..., 3) of algebra elements.
+    :param k_max: int. Number of 2pi shifts in either direction
+    :return: Tensor of shape (2 * k_max+1, ..., 3)
+    """
+    x = x[None]
+    x_norm = x.norm(dim=-1, keepdim=True)
+    shape = [-1, *[1]*(x.dim()-1)]
+    k_range = torch.arange(-k_max, k_max+1, dtype=x.dtype, device=x.device).view(shape)
+    return x / x_norm * (x_norm + 2 * math.pi * k_range)
+
+
+def so3_log_abs_det_jacobian(x):
+    """
+    Return element wise log abs det jacobian of exponential map
+    :param x: Algebra tensor of shape (..., 3)
+    :return: Tensor of shape (..., 3)
+    """
+    x_norm = x.double().norm(dim=-1)
+    ratio = (2 - 2 * torch.cos(x_norm)) / x_norm ** 2
+
+    # Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
+    mask = x_norm < 1E-10
+    ratio.masked_scatter_(mask, 1 - x_norm[mask] ** 2 / 12)
+    return torch.log(ratio).to(x.dtype)
 
 
 def so3_matrix_to_quaternions(r):

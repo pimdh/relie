@@ -80,14 +80,17 @@ class LocalDiffeoTransformedDistribution(Distribution):
         Scores the sample by inverting the transform(s) and computing the score
         using the score of the base distribution and the log abs det jacobian.
         """
-        return self._log_prob(value, self.transforms)
+        return self._log_prob(value, reversed(self.transforms))
 
     def _log_prob(self, y, transforms):
+        # TODO: fix dtypes
         event_dim = len(self.event_shape)
         if not transforms:
-            return _sum_rightmost(
+            log_prob = _sum_rightmost(
                 self.base_dist.log_prob(y),
-                event_dim - len(self.base_dist.event_shape))
+                event_dim - len(self.base_dist.event_shape)).float()
+            assert torch.isnan(log_prob).sum() == 0
+            return log_prob
 
         transform, *transforms = transforms
 
@@ -96,11 +99,23 @@ class LocalDiffeoTransformedDistribution(Distribution):
             log_prob = -_sum_rightmost(
                 transform.log_abs_det_jacobian(x, y),
                 event_dim - transform.event_dim)
-            return log_prob + self._log_prob(x, transforms)
+            next_log_prob = self._log_prob(x, transforms)
+            assert torch.isnan(log_prob).sum() == 0
+            assert torch.isnan(next_log_prob).sum() == 0
+            sum_log_prob = log_prob.float() + next_log_prob.float()
+            assert torch.isnan(sum_log_prob).sum() == 0
+            return sum_log_prob
         else:
-            xset = transform.inverse_set(y)
+            xset, mask = transform.inverse_set(y)
             log_prob = -_sum_rightmost(
                 transform.log_abs_det_jacobian(xset, y),
                 event_dim - transform.event_dim)
-            return torch.logsumexp(
-                log_prob + self._log_prob(xset, transforms), dim=0)
+            next_log_prob = self._log_prob(xset, transforms)
+            assert torch.isnan(log_prob).sum() == 0
+            assert torch.isnan(next_log_prob).sum() == 0
+            terms = torch.where(
+                mask,
+                log_prob.float() + next_log_prob.float(),
+                torch.tensor([float('-inf')], device=log_prob.device))
+            assert torch.isnan(terms).sum() == 0
+            return torch.logsumexp(terms, dim=0)

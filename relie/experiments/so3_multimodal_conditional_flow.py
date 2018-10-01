@@ -16,6 +16,7 @@ Data generation:
 """
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 from sklearn.decomposition import PCA
 
 import torch
@@ -32,8 +33,6 @@ from relie.utils.modules import MLP, ConditionalModule, ToTransform
 device = torch.device('cpu')
 
 # Prior distribution p(G)
-# generation_alg_distr = Normal(torch.tensor([0., .5, -.5,]), torch.tensor([0.5, .1, 1.]))
-# generation_group_distr = LDTD(generation_alg_distr, SO3ExpTransform())
 generation_group_distr = SO3Prior(dtype=torch.double)
 
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
@@ -135,7 +134,7 @@ model = FlowDistr(flow_model)
 optimizer = torch.optim.Adam(model.parameters())
 
 losses = []
-for it in range(50000):
+for it in range(20000):
     x_batch, g_batch, _ = next(loader_iter)
     x_batch = x_batch.view(-1, x_dims)
     loss = model.forward(x_batch, g_batch).mean()
@@ -148,36 +147,19 @@ for it in range(50000):
         print(f"Loss: {np.mean(losses[-1000:]):.4f}.")
 
 # %%
-num_means = 2
 num_noise_samples = 1000
-means = generation_group_distr.sample((num_means, ))
+g_zero = generation_group_distr.sample((1,))[0]
+g_subgroup = symmetry_group @ g_zero[None]
+x = block_wigner_matrix_multiply(
+    so3_matrix_to_eazyz(g_zero[None].float()), x_zero[None], max_rep_degree)
 
-viz_data = []
-for _ in range(num_means):
-    mean = generation_group_distr.sample((1, ))[0]
-    x = block_wigner_matrix_multiply(
-        so3_matrix_to_eazyz(mean[None].float()), x_zero[None], max_rep_degree)
-    x = x.view(-1, x_dims)
-    noise_samples = noise_group_distr.sample((num_noise_samples, ))
-    samples = (noise_samples @ mean[None]).view(num_noise_samples, 9)
-
-    inferred_distr = model.distr(x)
-    inferred_samples = inferred_distr.sample((num_noise_samples, )).view(
-        num_noise_samples, 9)
-    viz_data.append((samples, inferred_samples))
-
-all_data = torch.cat([torch.cat(d) for d in viz_data])
-
-pca = PCA(3).fit(all_data)
+inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
+samples = inferred_distr.sample((num_noise_samples,)).view(num_noise_samples, 9)
+pca = PCA(3).fit(g_subgroup.view(4, 9))
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-
-for i, (samples, inferred_samples) in enumerate(viz_data):
-    samples = pca.transform(samples)
-    inferred_samples = pca.transform(inferred_samples)
-    ax.scatter(*samples.T, label=f"Original {i}", alpha=.2)
-    ax.scatter(*inferred_samples.T, label=f"Inferred {i}", alpha=.2)
-
+ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.5)
+ax.scatter(*pca.transform(g_subgroup.view(4, 9)).T, label="Ground truth", s=50)
 plt.legend()
 plt.show()

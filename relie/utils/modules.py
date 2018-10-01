@@ -26,6 +26,9 @@ class ConditionalModule(nn.Module):
     Broadcasts conditional variable to allow for extra batch dims.
     Concats conditional var and input.
     Reshapes to feed batch dim = 1 to submodule.
+
+    Note:
+        x and y must have same -2'th dimension (usually batch)
     """
     def __init__(self, submodule, x):
         super().__init__()

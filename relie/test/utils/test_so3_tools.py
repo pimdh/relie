@@ -6,10 +6,10 @@ from relie.utils.so3_tools import *
 
 
 def test_exp_not_nan():
-    ball = sample_ball(1000000, 3) * 2 * np.pi
+    ball = sample_ball(1000000, 3, dtype=torch.double) * 2 * np.pi
     r = so3_exp(ball)
     assert torch.isnan(r).sum() == 0
-    r = so3_exp(torch.zeros(3))
+    r = so3_exp(torch.zeros(3, dtype=torch.double))
     assert torch.isnan(r).sum() == 0
 
 
@@ -70,9 +70,9 @@ def test_regular_region():
 
 def test_so3_log_pi():
     """Test so3_log_pi in particular."""
-    x = torch.randn(1, 3)
+    x = torch.randn(1, 3, dtype=torch.double)
     x = x / x.norm(dim=1, keepdim=True) * .2
-    theta = torch.tensor([.2])[:, None, None]
+    theta = torch.tensor([.2], dtype=torch.double)[:, None, None]
     r = so3_exp(x)
     x_recon = so3_vee(so3_log_pi(r, theta))
     assert_array_almost_equal(x, x_recon, 4)

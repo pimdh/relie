@@ -78,7 +78,7 @@ def so3_log(r):
     log = ratio * anti_sym
 
     # Separately handle theta close to pi
-    mask = (cos_theta[..., 0, 0].abs() > 1-1E-5).nonzero()
+    mask = (theta[..., 0, 0] > math.pi-1E-3).nonzero()
     if mask.numel():
         log[mask[:, 0]] = so3_log_pi(r[mask[:, 0]], theta[mask[:, 0]])
 

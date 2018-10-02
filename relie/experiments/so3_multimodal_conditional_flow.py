@@ -18,7 +18,6 @@ import os
 from time import time
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 from sklearn.decomposition import PCA
 
 import torch
@@ -26,7 +25,7 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform
+from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform, lu_affine_transform_parameters, LUAffineTransform
 from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply, so3_exp
@@ -83,7 +82,7 @@ x_data = block_wigner_matrix_multiply(angles.float(),
                                       max_rep_degree)
 
 dataset = TensorDataset(x_data, group_data_noised, group_data)
-loader = TensorLoader(dataset, 64, True)
+loader = TensorLoader(dataset, 640, True)
 loader_iter = cycle(loader)
 
 
@@ -92,23 +91,45 @@ class Flow(nn.Module):
         super().__init__()
         self.d = d
         self.d_residue = 1
-        self.d_transform = 2
+        self.d_transform = d - self.d_residue
+        self.x_preprocess = False
+        self.affine = False
+
+        if self.x_preprocess:
+            self.x_repr_dim = 9
+            self.x_net = MLP(d_conditional, self.x_repr_dim, 50, 4, batch_norm=False)
+        else:
+            self.x_repr_dim = d_conditional
+            self.x_net = None
+
         self.nets = nn.ModuleList([
-            MLP(self.d_residue + d_conditional, 2 * self.d_transform, 50, 3)
-            for _ in range(n_layers)
+            MLP(self.d_residue + self.x_repr_dim,
+                2 * self.d_transform,
+                50,
+                3,
+                batch_norm=False) for _ in range(n_layers)
         ])
+        if self.affine:
+            self.affine_params = nn.ModuleList([
+                lu_affine_transform_parameters(d) for _ in range(n_layers)])
+        else:
+            self.affine_params = [None] * n_layers
         self._set_params()
         r = list(range(3))
         self.permutations = [r[i:] + r[:i] for i in range(3)]
 
     def forward(self, x):
+        if self.x_net is not None:
+            x = self.x_net(x)
         transforms = []
-        for i, (net, permutation) in enumerate(
-                zip(self.nets, cycle(self.permutations))):
+        for i, (net, affine_params, permutation) in enumerate(
+                zip(self.nets, self.affine_params, cycle(self.permutations))):
             transforms.extend([
                 CouplingTransform(self.d_residue, ConditionalModule(net, x)),
                 PermuteTransform(permutation),
             ])
+            if affine_params:
+                transforms.append(LUAffineTransform(**affine_params))
         return ComposeTransform(transforms)
 
     def _set_params(self):
@@ -154,7 +175,7 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-flow_model = Flow(6, x_dims, 12)
+flow_model = Flow(3, x_dims, 12)
 model = FlowDistr(flow_model).to(device)
 optimizer = torch.optim.Adam(model.parameters())
 
@@ -169,6 +190,9 @@ for it in range(num_its):
     optimizer.step()
     losses.append(loss.item())
 
+    for n, p in model.named_parameters():
+        assert torch.isnan(p).sum() == 0, f"NaN in parameters {n}"
+
     if it % 1000 == 0:
         print(f"Loss: {np.mean(losses[-1000:]):.4f}.")
 
@@ -178,29 +202,30 @@ if num_its > 0:
     print(f"Model saved to {path}")
 
 # %%
+model.eval()
+model.load_state_dict(torch.load('models/so3-multimodal-1538459396.pkl'))
+for _ in range(5):
+    num_noise_samples = 1000
+    g_zero = generation_group_distr.sample((1, ))[0]
+    g_subgroup = symmetry_group @ g_zero[None]
+    # g_subgroup = g_zero[None]
+    x = block_wigner_matrix_multiply(
+        so3_matrix_to_eazyz(g_zero[None].float()), x_zero[None], max_rep_degree)
 
-# model.load_state_dict(torch.load('models/so3-multimodal-1538424738.pkl'))
-num_noise_samples = 1000
-g_zero = generation_group_distr.sample((1, ))[0]
-g_subgroup = symmetry_group @ g_zero[None]
-# g_subgroup = g_zero[None]
-x = block_wigner_matrix_multiply(
-    so3_matrix_to_eazyz(g_zero[None].float()), x_zero[None], max_rep_degree)
+    inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
+    samples = inferred_distr.sample((num_noise_samples, )).view(
+        num_noise_samples, 9)
+    # pca = PCA(3).fit(g_subgroup.view(4, 9))
+    pca = PCA(3).fit(samples)
 
-inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
-samples = inferred_distr.sample((num_noise_samples, )).view(
-    num_noise_samples, 9)
-# pca = PCA(3).fit(g_subgroup.view(4, 9))
-pca = PCA(3).fit(samples)
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.2)
-ax.scatter(
-    *pca.transform(g_subgroup.view(-1, 9)).T,
-    label="Ground truth",
-    s=100,
-    alpha=1)
-ax.view_init(70, 30)
-plt.legend()
-plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.2)
+    ax.scatter(
+        *pca.transform(g_subgroup.view(-1, 9)).T,
+        label="Ground truth",
+        s=100,
+        alpha=1)
+    ax.view_init(70, 30)
+    plt.legend()
+    plt.show()

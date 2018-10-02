@@ -28,6 +28,8 @@ class RadialTanhTransform(Transform):
         )
 
     def _inverse(self, y):
+        org_dtype = y.dtype
+        y = y.double()
         y_norm = y.norm(dim=-1, keepdim=True)
         y_normed = y / y_norm
         x = self.tanh_inverse(y_norm / self.radius) * y_normed
@@ -36,7 +38,7 @@ class RadialTanhTransform(Transform):
             y_norm > 1E-8,
             x,
             y / self.radius
-        )
+        ).to(org_dtype)
 
     @staticmethod
     def tanh_inverse(y):

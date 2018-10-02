@@ -20,5 +20,5 @@ class SO3Prior(Distribution):
         return quaternions_to_so3_matrix(q.view(*shape, 4))
 
     def log_prob(self, value):
-        return value.new_full(value[:-2], 1 / (8 * np.pi ** 2))
+        return value.new_full(value.shape[:-2], 1 / (8 * np.pi ** 2))
 

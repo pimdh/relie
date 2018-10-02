@@ -50,6 +50,22 @@ class ConditionalModule(nn.Module):
         return res
 
 
+class BatchSqueezeModule(nn.Module):
+    """
+    Module that reshapes batch dim to single dimension, calls submodule and reshapes.
+    """
+    def __init__(self, submodule, feature_dims=1):
+        super().__init__()
+        self.submodule = submodule
+        self.feature_dims = feature_dims
+
+    def forward(self, x):
+        batch_shape = x.shape[:-self.feature_dims]
+        x = x.view(-1, *x.shape[-self.feature_dims:])
+        y = self.submodule(x)
+        return y.view(*batch_shape, *y.shape[1:])
+
+
 class ToTransform(Transform):
     """
     Transform dtype or device.

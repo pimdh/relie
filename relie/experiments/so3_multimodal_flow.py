@@ -82,7 +82,7 @@ class Flow(nn.Module):
     def forward(self):
         transforms = []
         for i, (net, permutation) in enumerate(
-                zip(self.nets, self.affine_params, cycle(self.permutations))):
+                zip(self.nets, cycle(self.permutations))):
             transforms.extend([
                 CouplingTransform(self.d_residue, BatchSqueezeModule(net)),
                 PermuteTransform(permutation),

@@ -96,16 +96,19 @@ def se3_log(r):
     so3, r3 = se3.split([3,1],-1)
     
     so3_alg = so3_log(so3)
-    
+    #print(so3, so3.shape)
     theta = so3_vee(so3_alg).norm(p=2, dim=-1, keepdim=True)
     
     eye = torch.eye(3, device=r.device, dtype=r.dtype)
+    
     Vinv = eye + so3_alg/2 \
         + ((1 - theta*torch.sin(theta)/(2-2*torch.cos(theta)))/theta**2)[..., None]*(so3_alg@so3_alg)
+    #print(theta.shape)   
+    #print(((1 - theta*torch.sin(theta)/(2-2*torch.cos(theta)))/theta**2)[..., None])
     
     r3_alg = Vinv@r3
     
-    return se3_fill(so3_alg, r3_alg, "alg")
+    return se3_fill(so3_alg, r3_alg.squeeze(-1), "alg")
 
 def se3_inv(x):
     """   

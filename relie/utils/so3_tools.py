@@ -317,5 +317,9 @@ def random_quaternions(n, dtype=torch.float32, device=None):
     ), 1)
 
 
+def so3_uniform_random(n, dtype=torch.float32, device=None):
+    return quaternions_to_so3_matrix(random_quaternions(n, dtype, device))
+
+
 def so3_inv(el):
     return el.transpose(-2, -1)

@@ -26,7 +26,8 @@ from torch.utils.data import TensorDataset
 from relie.flow import LocalDiffeoTransformedDistribution as LDTD
 from relie.lie_distr import SO3ExpTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
-from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply
+from relie.utils.so3_tools import so3_matrix_to_eazyz
+from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
 from relie.utils.modules import MLP
 
 device = torch.device('cpu')

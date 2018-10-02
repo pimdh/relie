@@ -144,13 +144,18 @@ def so3_log_abs_det_jacobian(x):
     Return element wise log abs det jacobian of exponential map
     :param x: Algebra tensor of shape (..., 3)
     :return: Tensor of shape (..., 3)
+
+    Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
     """
     x_norm = x.double().norm(dim=-1)
-    ratio = (2 - 2 * torch.cos(x_norm)) / x_norm ** 2
+    mask = x_norm > 1E-10
+    x_norm = torch.where(mask, x_norm, torch.ones_like(x_norm))
 
-    # Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
-    mask = x_norm < 1E-10
-    ratio.masked_scatter_(mask, 1 - x_norm[mask] ** 2 / 12)
+    ratio = torch.where(
+        mask,
+        (2 - 2 * torch.cos(x_norm)) / x_norm ** 2,
+        1 - x_norm ** 2 / 12,
+    )
     return torch.log(ratio).to(x.dtype)
 
 

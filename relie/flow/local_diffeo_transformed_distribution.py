@@ -107,6 +107,7 @@ class LocalDiffeoTransformedDistribution(Distribution):
             return sum_log_prob
         else:
             xset, mask = transform.inverse_set(y)
+            assert (mask.sum(dim=0) > 0).all()
             log_prob = -_sum_rightmost(
                 transform.log_abs_det_jacobian(xset, y),
                 event_dim - transform.event_dim)

@@ -1,18 +1,5 @@
 """
-We have a dataset (x, G) for images x and orientations G:
-We learn a map  f:  X x R^d -> R^d, such that for any x, f_x  : R^d -> R^d is invertible.
-
-Then we do MLE:
-\max_f  E_{(x,G)}  [ \log p(G|x) ]
-where
-\log p(G|x) = \log \sum_{g \in Log(G)} p_0(f(x, g)) + change of variables
-for some prior  p_0
-
-Data generation:
-- We sample v \in R^d in some representation
-- We make this symmetrical by acting v = v + g_1(v) + ... for g_i in discrete subgroup
-- From uniform prior, we sample g \in G
-- We act: v_g = g(v)
+MLE of a multimodal distribution.
 """
 import os
 from time import time

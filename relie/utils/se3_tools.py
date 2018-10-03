@@ -98,12 +98,28 @@ def se3_log(r):
     so3_alg = so3_log(so3)
     #print(so3, so3.shape)
     theta = so3_vee(so3_alg).norm(p=2, dim=-1, keepdim=True)
-    print(theta)
+    #print(theta.shape, so3_alg.shape)
+    K = so3_alg/theta.unsqueeze(-1)
+    
+    # convert nan into 0
+    mask = (K != K)
+    K[mask] = 0
+    
+    A = theta/torch.sin(theta) 
+    B = (1 - torch.cos(theta))/(theta**2)
+    
+    mask = (theta< 1E-20).nonzero()
+     # x/sin(x) -> 1 + x^2/6 as x->0
+    A[mask] = 1 + theta[mask] ** 2 / 6
+    # (1-cos(x))/x^2 -> 1/2  as x->0
+    B[mask] = 1/2 
+   
+    
     
     eye = torch.eye(3, device=r.device, dtype=r.dtype)
     
     Vinv = eye + so3_alg/2 \
-        + ((1 - theta*torch.sin(theta)/(2-2*torch.cos(theta)))/theta**2)[..., None]*(so3_alg@so3_alg)
+        + (1 - A/(2*B))[..., None]*(K@K)
     #print(theta.shape)   
     #print(((1 - theta*torch.sin(theta)/(2-2*torch.cos(theta)))/theta**2)[..., None])
     
@@ -123,7 +139,7 @@ def se3_inv(x):
     
     so3_inv = so3.transpose(-2,-1)
     
-    r3_inv = so3_inv@r3
+    r3_inv = -so3_inv@r3
     
     return se3_fill(so3_inv, r3_inv.squeeze(-1))
     

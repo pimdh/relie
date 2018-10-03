@@ -98,6 +98,7 @@ def se3_log(r):
     so3_alg = so3_log(so3)
     #print(so3, so3.shape)
     theta = so3_vee(so3_alg).norm(p=2, dim=-1, keepdim=True)
+    print(theta)
     
     eye = torch.eye(3, device=r.device, dtype=r.dtype)
     

@@ -25,6 +25,6 @@ def test_lu_affine_transform():
         assert_array_almost_equal(t.inv(torch.tensor(y)), x, 5)
 
         assert_array_almost_equal(
-            t.log_abs_det_jacobian(x, y)[0],
+            t.log_abs_det_jacobian(x, y).item(),
             torch.log(torch.abs(torch.det(w))),
             decimal=5)

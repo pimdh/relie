@@ -4,3 +4,4 @@
 point_exp/logs/*
 models
 outputs
+**.pyc

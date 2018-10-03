@@ -332,7 +332,7 @@ class LieModel:
 
                 if self.prob:
                     kl = self.distributions[j].kl_div(lie_el, self.prior)
-                    view_losses += kl * self.kl_beta
+                    view_losses += -kl * self.kl_beta
 
                 if (i % print_freq) == 0:
                     print('\t view %d \t loss: %.6f \t kl: %.6f \t z_diff: %.3f' %

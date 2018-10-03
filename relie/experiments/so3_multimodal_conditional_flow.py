@@ -184,6 +184,38 @@ def gen_data(symmetry_group_size=3, noise=0.1):
     )
 
 
+def plot(model, data, out_path, tb_writer, it):
+    model.eval()
+    for i in range(5):
+        num_noise_samples = 1000
+        g_zero = data.generation_group_distr.sample((1, ))[0]
+        g_subgroup = data.symmetry_group @ g_zero[None]
+        # g_subgroup = g_zero[None]
+        x = block_wigner_matrix_multiply(
+            so3_matrix_to_eazyz(g_zero[None].float()), data.x_zero[None], data.max_rep_degree)
+
+        inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
+        samples = inferred_distr.sample((num_noise_samples, )).view(
+            num_noise_samples, 9)
+        # pca = PCA(3).fit(g_subgroup.view(4, 9))
+        pca = PCA(3).fit(samples)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.2)
+        ax.scatter(
+            *pca.transform(g_subgroup.view(-1, 9)).T,
+            label="Ground truth",
+            s=100,
+            alpha=1)
+        ax.view_init(70, 30)
+        plt.legend()
+        path = out_path(category=f'imgs/{it}', filename=f'{i}.png')
+        plt.savefig(path)
+        tb_writer.add_image(f'samples-{i}', tensor_read_image(path), it)
+        plt.show()
+
+
 def main():
     parser = argparse.ArgumentParser('SO(3) multimodal conditional flow')
     parser.add_argument('--name')
@@ -221,39 +253,14 @@ def main():
             logging.info(f"It {it}. Loss: {np.mean(losses[-1000:]):.4f}.")
             tb_writer.add_scalar('loss', np.mean(losses[-1000:]), it)
 
-    path = out_path(filename='model.pkl')
-    torch.save(model.state_dict(), path)
-    logging.info(f"Model saved to {path}")
+            save_path = out_path(filename='model.pkl')
+            torch.save(model.state_dict(), save_path)
+            if it % 1000 == 0:
+                plot(model, data, out_path, tb_writer, it)
 
-    model.eval()
-    for i in range(5):
-        num_noise_samples = 1000
-        g_zero = data.generation_group_distr.sample((1, ))[0]
-        g_subgroup = data.symmetry_group @ g_zero[None]
-        # g_subgroup = g_zero[None]
-        x = block_wigner_matrix_multiply(
-            so3_matrix_to_eazyz(g_zero[None].float()), data.x_zero[None], data.max_rep_degree)
+    logging.info(f"Model saved to {save_path}")
+    plot(model, data, out_path, tb_writer, args.num_its)
 
-        inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
-        samples = inferred_distr.sample((num_noise_samples, )).view(
-            num_noise_samples, 9)
-        # pca = PCA(3).fit(g_subgroup.view(4, 9))
-        pca = PCA(3).fit(samples)
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(*pca.transform(samples).T, label="Inferred", alpha=.2)
-        ax.scatter(
-            *pca.transform(g_subgroup.view(-1, 9)).T,
-            label="Ground truth",
-            s=100,
-            alpha=1)
-        ax.view_init(70, 30)
-        plt.legend()
-        path = out_path(category='imgs', filename=f'{i}.png')
-        plt.savefig(path)
-        tb_writer.add_image(f'samples-{i}', tensor_read_image(path))
-        plt.show()
 
 
 

@@ -254,6 +254,7 @@ def main():
 
     losses = []
     for it in range(args.num_its):
+        model.train()
         x_batch, g_batch, g_truth = next(data.loader_iter)
         x_batch = x_batch.view(-1, data.x_dims)
         loss = model.forward(x_batch, g_batch).mean()

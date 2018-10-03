@@ -4,6 +4,11 @@ import argparse
 import os
 import datetime
 
+import sys
+sys.path.append("..")
+
+from relie.lie_distr import SO3Prior
+
 TEST = None
 LOG_DIR = "logs/"
 
@@ -14,11 +19,16 @@ def run_test():
     :return:
     """
     data = create_true_data(n_points=TEST.np, n_views=TEST.nv,
-                            lie_group=TEST.lie_type, rot=bool(TEST.learn_rot))
-    train_vars = init_train_vars(data[0], n_views=TEST.nv, z=bool(TEST.learn_z),
-                                 rot=bool(TEST.learn_rot), trans=bool(TEST.learn_trans))
+                            lie_group=TEST.lie_group, rot=bool(TEST.learn_rot))
+    train_vars = init_train_vars(data[0], n_views=TEST.nv, prob=bool(TEST.prob), lie_group=TEST.lie_group,
+                                 z_given=bool(TEST.z_given), rot=bool(TEST.learn_rot),
+                                 trans=bool(TEST.learn_trans))
 
-    model = DepthEstimatorModel(data, train_vars)
+    prior = None
+    if bool(TEST.prob) and TEST.lie_group == 'so3':
+        prior = SO3Prior()
+
+    model = LieModel(data, train_vars, lie_group=TEST.lie_group, prior=prior, prob=bool(TEST.prob), kl_beta=TEST.beta)
     model.train(n_iter=TEST.it, print_freq=TEST.pf, plot_freq=TEST.plotf)
 
     os.makedirs(LOG_DIR, exist_ok=True)
@@ -32,9 +42,13 @@ if __name__ == "__main__":
                         help='number of pointa in cloud')
     parser.add_argument('--nv', type=int, default=1,
                         help='number of views to generate')
-    parser.add_argument('--lie_type', type=str, default='se3',
+    parser.add_argument('--lie_group', type=str, default='se3',
                         help='type of lie element, so3 or se3 supported')
-    parser.add_argument('--learn_z', type=int, default=1,
+    parser.add_argument('--prob', type=int, default=1,
+                        help='probabilistic version or not')
+    parser.add_argument('--beta', type=float, default=1.,
+                        help='scale kl divergence')
+    parser.add_argument('--z_given', type=int, default=1,
                         help='estimate z, i.e. depth vector')
     parser.add_argument('--learn_rot', type=int, default=1,
                         help='learn rotation')

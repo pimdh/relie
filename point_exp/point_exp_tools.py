@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 
 from lie_tools import rodrigues
 
+import sys
+sys.path.append("..")
+
+from pushed_normal import PushedNormalSO3
+
 
 # noinspection PyCallingNonCallable
 def get_pointcloud(k):
@@ -13,7 +18,7 @@ def get_pointcloud(k):
     :param k: number of points in cloud
     :return: point cloud as (k, 3) tensor
     """
-    x = torch.tensor(np.random.normal(0, 2, (k, 3)), dtype=torch.float32)
+    x = torch.tensor(np.random.normal(0, 2, (k, 3)), dtype=torch.float64)
     return x
 
 
@@ -28,16 +33,17 @@ def get_se3(so3, r):
     fill_shape = list(r.shape[:-2])
     filler = torch.tensor([[0., 0., 0., 1.]]).view([1] *
                                                    (len(fill_shape) + 1) + [4]).repeat(fill_shape + [1, 1])
-    se3 = torch.cat([so3, r], -1).type(torch.float32)
-    se3 = torch.cat([se3, filler], -2)
+    se3 = torch.cat([so3, r], -1).type(torch.float64)
+    se3 = torch.cat([se3, filler.double()], -2)
+
     return se3
 
 
 def do_se3_action(se3, x):
     """
     Perform a SE3 group action on pointcloud
-    :param se3: se3 element, (tuple1 x4x4 matrix)
-    :param x: pointcloude, (tuple2 x 3 matrix)
+    :param se3: se3 element, (tuple1, 4, 4)
+    :param x: pointcloude, (tuple2, 3)
     :return: rotated pointcloud, (tuple2, tuple1, 3)
     """
     tuple1 = list(se3.shape[:-2])
@@ -47,10 +53,28 @@ def do_se3_action(se3, x):
     ones2 = [1] * len(tuple2)
 
     se3 = se3.view(tuple1 + ones2 + [4, 4])
-    x_hat = torch.cat([x, torch.ones(tuple2 + [1])], -1)
+    x_hat = torch.cat([x, torch.ones(tuple2 + [1]).double()], -1)
     x_hat = se3 @ x_hat.view(ones1 + tuple2 + [4, 1])
 
     return x_hat[..., [0, 1, 2], 0]
+
+
+def do_so3_action(so3, x):
+    """
+    Perform a SO3 group action on pointcloud
+    :param so3: so3 element, (tuple1, 3, 3)
+    :param x: pointcloude, (tuple2, 3)
+    :return: rotated pointcloud, (tuple2, tuple1, 3)
+    """
+
+    tuple1 = list(so3.shape[:-2])
+    tuple2 = list(x.shape[:-1])
+
+    so3 = so3.view(tuple1 + [1] * len(tuple2) + [3, 3])
+    x = x.view([1] * len(tuple1) + tuple2 + [3, 1])
+    x_hat = so3 @ x
+
+    return x_hat.squeeze()
 
 
 def z_diff(z, z_var):
@@ -99,8 +123,7 @@ def xy_z_decomp(xyz):
 
 
 # noinspection PyCallingNonCallable
-def create_true_data(n_points=5, n_views=1,
-                     lie_group='se3', rot=True, show=False):
+def create_true_data(n_points=5, n_views=1, lie_group='se3', rot=True, show=False):
     """
     Create pointcloud and rotated pointclouds
     :param n_points: number of points in cloud
@@ -113,11 +136,11 @@ def create_true_data(n_points=5, n_views=1,
     # generate point cloud
     cloud = get_pointcloud(n_points)
 
-    se3_elements = []
+    lie_elements = []
     rotated_clouds = []
     for view in range(n_views):
-
-        v = torch.tensor(np.random.normal(0, 2, 3)) if rot else torch.tensor(np.zeros(3)) + 1e-5
+        v = torch.tensor(np.random.normal(0, 2, 3))
+        v0 = torch.tensor(np.zeros(3)) + 1e-5
 
         if lie_group == 'se3':
             r = torch.tensor(np.random.normal(0, 1, (3, 1)))
@@ -126,11 +149,18 @@ def create_true_data(n_points=5, n_views=1,
         else:
             raise Exception('use either so3 or se3')
 
+        if not rot:
+            v = v0
+
         so3 = rodrigues(v)
         se3 = get_se3(so3, r)
         rotated_cloud = do_se3_action(se3, cloud)
 
-        se3_elements.append(se3)
+        if lie_group == 'se3':
+            lie_elements.append(se3)
+        elif lie_group == 'so3':
+            lie_elements.append(so3)
+
         rotated_clouds.append(rotated_cloud)
 
         if show:
@@ -139,16 +169,18 @@ def create_true_data(n_points=5, n_views=1,
             print_progress(cloud_xy, rotated_cloud_xy,
                            'original', ('rotated %d' % view), title='creation')
 
-    return cloud, rotated_clouds, se3_elements
+    return cloud, rotated_clouds, lie_elements
 
 
 # noinspection PyCallingNonCallable
-def init_train_vars(cloud, n_views=1, z=True, rot=True, trans=True):
+def init_train_vars(cloud, n_views=1, prob=True, lie_group='so3',z_given=True, rot=True, trans=True):
     """
     Create trainable params
     :param cloud: pointcloud used as original, (tuple, k, 3)
     :param n_views: number of rotated views generated
-    :param z: learn depth, boolean
+    :param prob: probabilistiv version, boolean
+    :param lie_group: lie group to use
+    :param z_given: use ground truth, boolean
     :param rot: learn rotation, boolean
     :param trans: learn translation, boolean
     :return: [z inits], [v inits], [r inits], [params to optimize]
@@ -158,13 +190,21 @@ def init_train_vars(cloud, n_views=1, z=True, rot=True, trans=True):
 
     # initialize z_axis
     z_var = cloud[..., -1].clone().unsqueeze(-1)
-    if z:
-        # noinspection PyCallingNonCallable
+    if not z_given:
         z_var = torch.tensor(np.random.normal(0., 1.,
                                               (list(cloud.shape[:-1]) + [1])),
-                             dtype=torch.float32,
+                             dtype=torch.float64,
                              requires_grad=True)
         optim_params.append(z_var)
+
+    if prob:
+        assert lie_group == 'so3', print('only so3 probabilistic supported')
+        p_vars = []
+        for view in range(n_views):
+            p = PushedNormalSO3()
+            p_vars.append(p)
+            optim_params += list(p.parameters())
+        return z_var, p_vars, optim_params
 
     for view in range(n_views):
         # se3 rotation
@@ -184,41 +224,51 @@ def init_train_vars(cloud, n_views=1, z=True, rot=True, trans=True):
     return z_var, v_vars, r_vars, optim_params
 
 
-class DepthEstimatorModel:
+class LieModel:
     """Model to estimate rotation and depth"""
 
-    def __init__(self, data, train_vars):
+    def __init__(self, data, train_vars, lie_group=None, prior=None, prob=True, kl_beta=0.1):
         """
-        Initialize depth estimator
-        :param data: [pointcloud, [rotated pointclouds], [se3 elements]]
-        :param train_vars: [[z_vars], [v_vars], [r vars], [optim_params]]
+        :param data: (cloud, rotated_clouds, lie_elements)
+        :param train_vars: (z_vars, _, optim_params),
+        where _ = (v_vars, r_vars) or (distribution) is prob is true
+        :param lie_group: indicate Lie group, so3 or se3
+        :param prior: prior distribution over group
+        :param prob: point estimate or probabilistic, boolean
+        :param kl_beta: scaling of KL strenght on loss
         """
 
         self.i_trained = 0
-        self.cloud, self.rotated_clouds, self.se3_elements = data
-        self.z_var, self.v_vars, self.r_vars, self.optim_params = train_vars
+        self.lie_group = lie_group
+        self.prior = prior
+        self.prob = prob
+        self.kl_beta = kl_beta
+        self.cloud, self.rotated_clouds, self.lie_elements = data
+        if prob:
+            self.z_var, self.distributions, self.optim_params = train_vars
+        else:
+            self.z_var, self.v_vars, self.r_vars, self.optim_params = train_vars
+
         self.optimizer = Adam(self.optim_params)
 
         self.losses, self.lie_recons, self.z_recons = [], [], []
 
-    @staticmethod
-    def forward(v, r, z, xy):
+    def forward(self, lie_el, z, xy):
         """
         Conduct forward pass
-        :param v: rotation algebra vector
-        :param r: translation vector
-        :param z: z-axis vector
-        :param xy: pointcloud xy axis
-        :return: rotated approximation, se3 element
+        :param lie_el:  lie group element to apply
+        :param z: z-axis of cloud, (learnable of given)
+        :param xy: xy-axis of cloud, fixed
         """
-        so3 = rodrigues(v)
-        se3 = get_se3(so3, r)
-
         xyz = torch.cat([xy, z], -1)
-        xyz_hat = do_se3_action(se3, xyz)
+        if self.lie_group == 'so3':
+            xyz_hat = do_so3_action(lie_el, xyz)
+        elif self.lie_group == 'se3':
+            xyz_hat = do_se3_action(lie_el, xyz)
+        else:
+            raise ValueError("lie_type must be so3 or se3, %s given" % self.lie_group)
 
-        xy_hat, z_hat = xy_z_decomp(xyz_hat)
-        return xy_hat, z_hat, se3
+        return xy_z_decomp(xyz_hat)
 
     @staticmethod
     def loss(xy, xy_hat):
@@ -233,7 +283,22 @@ class DepthEstimatorModel:
 
         return sqr_loss
 
-    def train(self, n_iter=10000, print_freq=500, plot_freq=-1):
+    def get_lie_element(self, p, v, r):
+        """
+        :param p: probability distribution
+        :param v: so3 algebra, R3
+        :param r: translation vector, R3
+        """
+        if self.prob:
+            lie_el = p.rsample(torch.Size([1]))
+        else:
+            lie_el = rodrigues(v)
+            if self.lie_group == 'se3':
+                lie_el = get_se3(lie_el, r)
+
+        return lie_el
+
+    def train(self, n_iter=10000, print_freq=500, plot_freq=20000):
         """
         Trainer function to learn group element
         :param n_iter: number of training iterations
@@ -241,32 +306,44 @@ class DepthEstimatorModel:
         :param plot_freq: plot progress graphic frequency
         :return: None
         """
-        print('train model with %d points in cloud:' % self.cloud.shape[0])
+        print('train model with %d points in cloud:' % (self.cloud.shape[-2]))
         for i in range(n_iter):
             self.i_trained += 1
             self.optimizer.zero_grad()
             view_losses = 0
-
+            kl = 0
             if (i % print_freq) == 0:
                 print('  it:%d:' % self.i_trained)
 
             for j, view in enumerate(self.rotated_clouds):
                 cloud_xy, cloud_z = xy_z_decomp(self.cloud)
                 rotated_cloud_xy, _ = xy_z_decomp(view)
-                xy_hat, z_hat, se3_recon = self.forward(self.v_vars[j],
-                                                        self.r_vars[j],
-                                                        self.z_var, cloud_xy)
-                self.lie_recons.append(se3_recon.detach().numpy())
-                view_losses += self.loss(rotated_cloud_xy, xy_hat)
+
+                if self.prob:
+                    lie_el = self.get_lie_element(self.distributions[j], None, None)
+                else:
+                    lie_el = self.get_lie_element(None, self.v_vars[j], self.r_vars[j])
+                self.lie_recons.append(lie_el.detach().numpy())
+
+                xy_hat, z_hat = self.forward(lie_el, self.z_var, cloud_xy)
+
+                l_view = self.loss(rotated_cloud_xy, xy_hat)
+                view_losses += l_view
+
+                if self.prob:
+                    kl = self.distributions[j].kl_div(lie_el, self.prior)
+                    view_losses += kl * self.kl_beta
 
                 if (i % print_freq) == 0:
-                    print('\t view %d \t loss: %.6f \t z_diff: %.3f' %
-                          (j, view_losses, z_diff(cloud_z, self.z_var)))
+                    print('\t view %d \t loss: %.6f \t kl: %.6f \t z_diff: %.3f' %
+                          (j, l_view, kl, z_diff(cloud_z, self.z_var)))
+
                 if (i % plot_freq) == 0:
                     print_progress(rotated_cloud_xy, xy_hat,
                                    x_label='view %d' % j,
                                    x_recon_label='recon',
                                    title='iter: %d' % self.i_trained)
+
             self.losses.append(view_losses.detach().numpy())
             self.z_recons.append(self.z_var.detach().numpy())
 
@@ -283,16 +360,18 @@ class DepthEstimatorModel:
         print('-' * 50)
         for i in range(len(self.rotated_clouds)):
             print('view %d' % i)
-            so3_rec = rodrigues(self.v_vars[i])
-            se3_rec = get_se3(so3_rec, self.r_vars[i])
+            if self.prob:
+                lie_rec = self.get_lie_element(self.distributions[i], None, None)
+            else:
+                lie_rec = self.get_lie_element(None, self.v_vars[i], self.r_vars[i])
 
-            print('\nse3 analysis')
+            print('\nlie analysis')
             print('true')
-            print(self.se3_elements[i])
+            print(self.lie_elements[i])
             print('rec')
-            print(se3_rec)
+            print(lie_rec)
             print('diff')
-            print(self.se3_elements[i] - se3_rec)
+            print(self.lie_elements[i] - lie_rec)
 
             print('\nz analysis')
             _, cloud_z = xy_z_decomp(self.cloud)

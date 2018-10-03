@@ -26,12 +26,12 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform, lu_affine_transform_parameters, LUAffineTransform, BatchNormTransform
-from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior, SO3MultiplyTransform
+from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform, BatchNormTransform
+from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
-from relie.utils.so3_tools import so3_matrix_to_eazyz, so3_exp, s2s2_gram_schmidt
+from relie.utils.so3_tools import so3_matrix_to_eazyz, so3_exp
 from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
-from relie.utils.modules import MLP, ConditionalModule, ToTransform, BatchSqueezeModule
+from relie.utils.modules import MLP, ConditionalModule, ToTransform
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -95,7 +95,6 @@ class Flow(nn.Module):
         self.d_residue = 1
         self.d_transform = d - self.d_residue
         self.x_preprocess = False
-        self.affine = False
         self.batch_norm = True
 
         if self.x_preprocess:
@@ -112,11 +111,6 @@ class Flow(nn.Module):
                 3,
                 batch_norm=False) for _ in range(n_layers)
         ])
-        if self.affine:
-            self.affine_params = nn.ModuleList([
-                lu_affine_transform_parameters(d) for _ in range(n_layers)])
-        else:
-            self.affine_params = [None] * n_layers
         self._set_params()
         r = list(range(3))
         self.permutations = [r[i:] + r[:i] for i in range(3)]
@@ -131,18 +125,14 @@ class Flow(nn.Module):
         if self.x_net is not None:
             x = self.x_net(x)
         transforms = []
-        for i, (net, bn, affine_params, permutation) in enumerate(
-                zip(self.nets, self.batch_norms, self.affine_params, cycle(self.permutations))):
+        for i, (net, bn, permutation) in enumerate(
+                zip(self.nets, self.batch_norms, cycle(self.permutations))):
             if bn is not None:
                 transforms.append(BatchNormTransform(bn))
             transforms.extend([
                 CouplingTransform(self.d_residue, ConditionalModule(net, x)),
-                # Ignore X
-                # CouplingTransform(self.d_residue, BatchSqueezeModule(net)),
                 PermuteTransform(permutation),
             ])
-            if affine_params:
-                transforms.append(LUAffineTransform(**affine_params))
         return ComposeTransform(transforms)
 
     def _set_params(self):
@@ -163,36 +153,10 @@ intermediate_transform = ComposeTransform([
 ])
 
 
-class ConditionalGroupFlow(nn.Module):
-    """Conditioned flow on Lie group."""
-    def __init__(self, x_dims):
-        super().__init__()
-        self.mode = 's2s2'
-
-        out_dims = {
-            's2s2': 6,
-            'exp': 3,
-        }
-        self.x_net = MLP(x_dims, out_dims[self.mode], 50, 5, batch_norm=True)
-
-    def forward(self, x):
-        out = self.x_net(x).double()
-
-        if self.mode == 's2s2':
-            v1, v2 = out[..., :3], out[..., 3:]
-            g = s2s2_gram_schmidt(v1, v2)
-        elif self.mode == 'exp':
-            g = so3_exp(out)
-        else:
-            raise RuntimeError()
-        return SO3MultiplyTransform(g)
-
-
 class FlowDistr(nn.Module):
-    def __init__(self, flow, group_flow=None):
+    def __init__(self, flow):
         super().__init__()
         self.flow = flow
-        self.group_flow = group_flow
         self.register_buffer('prior_loc', torch.zeros(3))
         self.register_buffer('prior_scale', torch.ones(3))
 
@@ -202,8 +166,6 @@ class FlowDistr(nn.Module):
             intermediate_transform,
             SO3ExpCompactTransform(algebra_support_radius),
         ]
-        # if self.group_flow:
-        #     transforms.append(self.group_flow(x).inv)
         return transforms
 
     def distr(self, x):
@@ -217,8 +179,8 @@ class FlowDistr(nn.Module):
 
 
 flow_model = Flow(3, x_dims, 12)
-group_flow_model = ConditionalGroupFlow(x_dims)
-model = FlowDistr(flow_model, group_flow_model).to(device)
+model = FlowDistr(flow_model).to(device)
+# model.load_state_dict(torch.load('models/so3-multimodal-1538530160.pkl'))
 optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
 
 losses = []
@@ -236,7 +198,7 @@ for it in range(num_its):
         assert torch.isnan(p).sum() == 0, f"NaN in parameters {n}"
 
     if it % 1000 == 0:
-        print(f"Loss: {np.mean(losses[-1000:]):.4f}.")
+        print(f"It {it}. Loss: {np.mean(losses[-1000:]):.4f}.")
 
 if num_its > 0:
     path = os.path.join('models', f'so3-multimodal-{int(time())}.pkl')
@@ -245,7 +207,7 @@ if num_its > 0:
 
 # %%
 model.eval()
-# model.load_state_dict(torch.load('models/so3-multimodal-1538459396.pkl'))
+# model.load_state_dict(torch.load('models/so3-multimodal-1538530160.pkl'))
 for _ in range(5):
     num_noise_samples = 1000
     g_zero = generation_group_distr.sample((1, ))[0]
@@ -267,10 +229,9 @@ for _ in range(5):
         *pca.transform(g_subgroup.view(-1, 9)).T,
         label="Ground truth",
         s=100,
-        alpha=1)
+        alpha=1,
+        zorder=2)
     ax.view_init(70, 30)
     plt.legend()
     plt.show()
 
-
-# %%

@@ -29,10 +29,14 @@ class BatchNormTransform(Transform):
         """Take mean and var from running mean. Inverse of test mode BatchNorm."""
         batch_shape = y.shape[:-1]
         y = y.view(-1, y.shape[-1])
-        sigma = torch.sqrt(self.module.running_var + self.module.eps)
+        mu = self.module.running_mean.detach()
+        var = self.module.running_var.detach()
+        sigma = torch.sqrt(var + self.module.eps)
         x = ((y - self.module.bias) / self.module.weight
-             * sigma + self.module.running_mean)
-        return x.view(*batch_shape, y.shape[-1])
+             * sigma + mu)
+        x = x.view(*batch_shape, y.shape[-1])
+        self._cache_stats = x, mu, var
+        return x
 
     def log_abs_det_jacobian(self, x, y):
         old_x, mu, var = self._cache_stats

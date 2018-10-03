@@ -258,3 +258,14 @@ def so3_uniform_random(n, dtype=torch.float32, device=None):
 
 def so3_inv(el):
     return el.transpose(-2, -1)
+
+
+def s2s2_gram_schmidt(v1, v2):
+    """Normalise 2 3-vectors. Project second to orthogonal component.
+    Take cross product for third. Stack to form SO matrix."""
+    u1 = v1
+    e1 = u1 / u1.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    u2 = v2 - (e1 * v2).sum(-1, keepdim=True) * e1
+    e2 = u2 / u2.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    e3 = torch.cross(e1, e2)
+    return torch.stack([e1, e2, e3], 1)

@@ -18,6 +18,7 @@ import os
 from time import time
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 
 import torch
@@ -25,11 +26,12 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform, lu_affine_transform_parameters, LUAffineTransform
-from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
+from relie.flow import LocalDiffeoTransformedDistribution as LDTD, PermuteTransform, CouplingTransform, RadialTanhTransform, lu_affine_transform_parameters, LUAffineTransform, BatchNormTransform
+from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior, SO3MultiplyTransform
 from relie.utils.data import TensorLoader, cycle
-from relie.utils.so3_tools import so3_matrix_to_eazyz, block_wigner_matrix_multiply, so3_exp
-from relie.utils.modules import MLP, ConditionalModule, ToTransform
+from relie.utils.so3_tools import so3_matrix_to_eazyz, so3_exp, s2s2_gram_schmidt
+from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
+from relie.utils.modules import MLP, ConditionalModule, ToTransform, BatchSqueezeModule
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -39,7 +41,7 @@ generation_group_distr = SO3Prior(dtype=torch.double, device=device)
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
 noise_alg_distr = Normal(
     torch.zeros(3).double().to(device),
-    torch.full((3, ), .001).double().to(device))
+    torch.full((3, ), .1).double().to(device))
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
@@ -76,12 +78,12 @@ x_data = block_wigner_matrix_multiply(
 x_zero = x_data.mean(0)
 
 # Act with group
-angles = so3_matrix_to_eazyz(group_data)
+angles = so3_matrix_to_eazyz(group_data_noised)
 x_data = block_wigner_matrix_multiply(angles.float(),
                                       x_zero.expand(num_samples, -1, -1),
                                       max_rep_degree)
 
-dataset = TensorDataset(x_data, group_data_noised, group_data)
+dataset = TensorDataset(x_data, group_data, group_data)
 loader = TensorLoader(dataset, 640, True)
 loader_iter = cycle(loader)
 
@@ -94,6 +96,7 @@ class Flow(nn.Module):
         self.d_transform = d - self.d_residue
         self.x_preprocess = False
         self.affine = False
+        self.batch_norm = True
 
         if self.x_preprocess:
             self.x_repr_dim = 9
@@ -118,14 +121,24 @@ class Flow(nn.Module):
         r = list(range(3))
         self.permutations = [r[i:] + r[:i] for i in range(3)]
 
+        if self.batch_norm:
+            self.batch_norms = nn.ModuleList([
+                nn.BatchNorm1d(d) for _ in range(n_layers)])
+        else:
+            self.batch_norms = [None] * n_layers
+
     def forward(self, x):
         if self.x_net is not None:
             x = self.x_net(x)
         transforms = []
-        for i, (net, affine_params, permutation) in enumerate(
-                zip(self.nets, self.affine_params, cycle(self.permutations))):
+        for i, (net, bn, affine_params, permutation) in enumerate(
+                zip(self.nets, self.batch_norms, self.affine_params, cycle(self.permutations))):
+            if bn is not None:
+                transforms.append(BatchNormTransform(bn))
             transforms.extend([
                 CouplingTransform(self.d_residue, ConditionalModule(net, x)),
+                # Ignore X
+                # CouplingTransform(self.d_residue, BatchSqueezeModule(net)),
                 PermuteTransform(permutation),
             ])
             if affine_params:
@@ -142,7 +155,7 @@ class Flow(nn.Module):
             last_module.bias.data = torch.zeros_like(last_module.bias)
 
 
-algebra_support_radius = np.pi * 1.1
+algebra_support_radius = np.pi * 1.6
 
 intermediate_transform = ComposeTransform([
     RadialTanhTransform(algebra_support_radius),
@@ -150,10 +163,36 @@ intermediate_transform = ComposeTransform([
 ])
 
 
+class ConditionalGroupFlow(nn.Module):
+    """Conditioned flow on Lie group."""
+    def __init__(self, x_dims):
+        super().__init__()
+        self.mode = 's2s2'
+
+        out_dims = {
+            's2s2': 6,
+            'exp': 3,
+        }
+        self.x_net = MLP(x_dims, out_dims[self.mode], 50, 5, batch_norm=True)
+
+    def forward(self, x):
+        out = self.x_net(x).double()
+
+        if self.mode == 's2s2':
+            v1, v2 = out[..., :3], out[..., 3:]
+            g = s2s2_gram_schmidt(v1, v2)
+        elif self.mode == 'exp':
+            g = so3_exp(out)
+        else:
+            raise RuntimeError()
+        return SO3MultiplyTransform(g)
+
+
 class FlowDistr(nn.Module):
-    def __init__(self, flow):
+    def __init__(self, flow, group_flow=None):
         super().__init__()
         self.flow = flow
+        self.group_flow = group_flow
         self.register_buffer('prior_loc', torch.zeros(3))
         self.register_buffer('prior_scale', torch.ones(3))
 
@@ -163,6 +202,8 @@ class FlowDistr(nn.Module):
             intermediate_transform,
             SO3ExpCompactTransform(algebra_support_radius),
         ]
+        # if self.group_flow:
+        #     transforms.append(self.group_flow(x).inv)
         return transforms
 
     def distr(self, x):
@@ -176,13 +217,14 @@ class FlowDistr(nn.Module):
 
 
 flow_model = Flow(3, x_dims, 12)
-model = FlowDistr(flow_model).to(device)
-optimizer = torch.optim.Adam(model.parameters())
+group_flow_model = ConditionalGroupFlow(x_dims)
+model = FlowDistr(flow_model, group_flow_model).to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
 
 losses = []
 num_its = 20000
 for it in range(num_its):
-    x_batch, g_batch, _ = next(loader_iter)
+    x_batch, g_batch, g_truth = next(loader_iter)
     x_batch = x_batch.view(-1, x_dims)
     loss = model.forward(x_batch, g_batch).mean()
     optimizer.zero_grad()
@@ -203,7 +245,7 @@ if num_its > 0:
 
 # %%
 model.eval()
-model.load_state_dict(torch.load('models/so3-multimodal-1538459396.pkl'))
+# model.load_state_dict(torch.load('models/so3-multimodal-1538459396.pkl'))
 for _ in range(5):
     num_noise_samples = 1000
     g_zero = generation_group_distr.sample((1, ))[0]
@@ -229,3 +271,6 @@ for _ in range(5):
     ax.view_init(70, 30)
     plt.legend()
     plt.show()
+
+
+# %%

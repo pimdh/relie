@@ -23,8 +23,8 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD
-from relie.lie_distr import SO3ExpTransform, SO3Prior
+from relie.flow import LocalDiffeoTransformedDistribution as LDTD, RadialTanhTransform
+from relie.lie_distr import SO3ExpTransform, SO3Prior, SO3ExpCompactTransform
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz
 from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
@@ -42,7 +42,7 @@ noise_alg_distr = Normal(torch.tensor([0., 0., 0.,]).double(), torch.tensor([.1,
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
-num_samples = 10000
+num_samples = 100000
 noise_samples = noise_group_distr.sample((num_samples,))
 group_data = generation_group_distr.sample((num_samples,))
 group_data_noised = noise_samples @ group_data
@@ -67,7 +67,7 @@ class ConditionalGaussianModel(nn.Module):
     """Models p(G|X) as exp^*(N(mu(x),sigma(X)))"""
     def __init__(self):
         super().__init__()
-        self.module = MLP(x_dims, 2 * 3, 50, 5)
+        self.module = MLP(x_dims, 2 * 3, 50, 8)
 
         # Set intital output at exp^*(N(0,1))
         last_module = list(self.module.modules())[-1]
@@ -78,7 +78,16 @@ class ConditionalGaussianModel(nn.Module):
         out = self.module(x.view(x.shape[0], -1)).double()
         loc, pre_scale = out[:, :3], out[:, 3:]
         alg_distr = Normal(loc, F.softplus(pre_scale))
-        return LDTD(alg_distr, SO3ExpTransform())
+
+        # Non-compact algebra region
+        # transforms = SO3ExpTransform()
+
+        # Compact algebra region
+        transforms = [
+            RadialTanhTransform(np.pi * 1.5),
+            SO3ExpCompactTransform(np.pi * 1.5),
+        ]
+        return LDTD(alg_distr, transforms)
 
     def forward(self, x, g):
         log_prob = self.distr(x).log_prob(g)
@@ -105,7 +114,7 @@ for it in range(50000):
 
 
 # %%
-num_means = 2
+num_means = 1
 num_noise_samples = 1000
 means = generation_group_distr.sample((num_means,))
 

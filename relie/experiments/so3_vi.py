@@ -16,10 +16,9 @@ As variational family, we use a Gaussian on the algebra.
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
-from relie.flow import LocalDiffeoTransformedDistribution
-from relie.lie_distr import SO3Prior, SO3ExpTransform
-from relie.utils.so3_tools import so3_log, so3_vee
-
+from relie.flow import LocalDiffeoTransformedDistribution as LTDT
+from relie.lie_distr import SO3Prior, SO3ExpTransform, SO3MultiplyTransform
+from relie.utils.so3_tools import so3_log, so3_vee, so3_exp
 
 torch.manual_seed(0)
 x_zero = torch.randn(100, 3, dtype=torch.double)
@@ -46,12 +45,32 @@ class Model(nn.Module):
         super().__init__()
 
         self.loc = nn.Parameter(torch.zeros(3).double())
-        self.scale = nn.Parameter(torch.ones(3).double())
+        self.pre_scale = nn.Parameter(torch.ones(3).double())
         self.transform = SO3ExpTransform()
 
+    def rsample(self, size):
+        alg_distr = Normal(torch.zeros(3).double(),
+                           F.softplus(self.pre_scale))
+        distr = LDTD(alg_distr, self.transform)
+        distr = LDTD(distr, SO3MultiplyTransform(so3_exp(self.loc)))
+                           
+        return distr.rsample(size)
+    
+    def log_prob(self, x):
+        alg_distr = Normal(torch.zeros(3).double(),
+                           F.softplus(self.pre_scale))
+        distr = LDTD(alg_distr, SO3ExpTransform())
+        distr = LDTD(distr, SO3MultiplyTransform(so3_exp(self.loc)))
+        
+        return distr.log_prob(x) 
+        
     def forward(self, x, x_zero):
-        alg_distr = Normal(self.loc * 1, self.scale * 1)
-        distr = LocalDiffeoTransformedDistribution(alg_distr, self.transform)
+        #alg_distr = Normal(self.loc * 1, self.pre_scale * 1)
+        alg_distr = Normal(torch.zeros(3).double(),
+                           F.softplus(self.pre_scale))
+        distr = LDTD(alg_distr, self.transform)
+        distr = LDTD(distr, SO3MultiplyTransform(so3_exp(self.loc)))
+        #distr = LDTD(alg_distr, self.transform)
         g = distr.rsample((64,))
 
         prediction_loss = prediction_loss_fn(g, x, x_zero).float()

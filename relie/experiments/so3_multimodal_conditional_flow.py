@@ -220,6 +220,7 @@ def plot(model, data, out_path, tb_writer, it):
         plt.savefig(path)
         tb_writer.add_image(f'samples-{i}', tensor_read_image(path), it)
         plt.show()
+        plt.close()
 
 
 def checkpoint(model, optimizer, path):
@@ -278,7 +279,7 @@ def main():
 
             save_path = out_path(filename='model.pkl')
             checkpoint(model, optimizer, save_path)
-            if it % 1000 == 0:
+            if it % 5000 == 0:
                 plot(model, data, out_path, tb_writer, it)
 
     logging.info(f"Model saved to {save_path}")

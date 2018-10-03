@@ -197,6 +197,12 @@ def plot(model, data, out_path, tb_writer, it):
         inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
         samples = inferred_distr.sample((num_noise_samples, )).view(
             num_noise_samples, 9)
+        mask = np.isfinite(samples).any(dim=1)
+        if np.logical_not(mask).any():
+            fails = np.logical_not(mask).sum()
+            print(f"Failed to sample {fails} elements, filtering")
+            samples = samples[mask]
+
         # pca = PCA(3).fit(g_subgroup.view(4, 9))
         pca = PCA(3).fit(samples)
 
@@ -272,7 +278,7 @@ def main():
 
             save_path = out_path(filename='model.pkl')
             checkpoint(model, optimizer, save_path)
-            if it % 5000 == 0:
+            if it % 1000 == 0:
                 plot(model, data, out_path, tb_writer, it)
 
     logging.info(f"Model saved to {save_path}")

@@ -12,7 +12,7 @@ class LieMultiplyTransform(Transform):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
-    event_dim = 2
+    event_dim = 1
 
     def __init__(self, g, inverse_fn):
         super().__init__(cache_size=1)

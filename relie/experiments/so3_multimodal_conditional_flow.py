@@ -190,6 +190,7 @@ def main():
     parser.add_argument('--flow_layers', type=int, default=18)
     parser.add_argument('--noise', type=float, default=0.1)
     parser.add_argument('--num_its', type=int, default=50000)
+    parser.add_argument('--load_path')
     args = parser.parse_args()
 
     tb_writer, out_path = setup_experiment('flow', args.name, args)
@@ -197,6 +198,10 @@ def main():
     data = gen_data(noise=args.noise)
     flow_model = Flow(3, data.x_dims, args.flow_layers)
     model = FlowDistr(flow_model).to(device)
+
+    if args.load_path:
+        model.load_state_dict(torch.load(args.load_path))
+
     optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
 
     losses = []

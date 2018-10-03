@@ -108,17 +108,25 @@ class LocalDiffeoTransformedDistribution(Distribution):
             assert torch.isnan(sum_log_prob).sum() == 0
             return sum_log_prob
         else:
-            xset, mask = transform.inverse_set(y)
-            assert (mask.sum(dim=0) > 0).all()
-            log_prob = -_sum_rightmost(
+            x, xset, mask = transform.inverse_set(y)
+
+            # First propate back x to use caching
+            x_log_prob = -_sum_rightmost(
+                transform.log_abs_det_jacobian(x, y),
+                event_dim - transform.event_dim)
+            x_next_log_prob = self._log_prob(x, transforms)
+            x_term = x_log_prob.float() + x_next_log_prob.float()
+
+            # Now propagate others
+            xset_log_prob = -_sum_rightmost(
                 transform.log_abs_det_jacobian(xset, y),
                 event_dim - transform.event_dim)
-            next_log_prob = self._log_prob(xset, transforms)
-            assert torch.isnan(log_prob).sum() == 0
-            assert torch.isnan(next_log_prob).sum() == 0
-            terms = torch.where(
+            xset_next_log_prob = self._log_prob(xset, transforms)
+            xset_terms = torch.where(
                 mask,
-                log_prob.float() + next_log_prob.float(),
-                torch.tensor([float('-inf')], device=log_prob.device))
+                xset_log_prob.float() + xset_next_log_prob.float(),
+                torch.tensor([float('-inf')], device=xset_log_prob.device))
+
+            terms = torch.cat([x_term[None], xset_terms])
             assert torch.isnan(terms).sum() == 0
             return torch.logsumexp(terms, dim=0)

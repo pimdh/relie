@@ -184,42 +184,7 @@ def gen_data(symmetry_group_size=3, noise=0.1):
     )
 
 
-def main():
-    parser = argparse.ArgumentParser('SO(3) multimodal conditional flow')
-    parser.add_argument('--name')
-    parser.add_argument('--flow_layers', type=int, default=18)
-    parser.add_argument('--noise', type=float, default=0.1)
-    parser.add_argument('--num_its', type=int, default=50000)
-    args = parser.parse_args()
-
-    tb_writer, out_path = setup_experiment('flow', args.name, args)
-
-    data = gen_data(noise=args.noise)
-    flow_model = Flow(3, data.x_dims, args.flow_layers)
-    model = FlowDistr(flow_model).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
-
-    losses = []
-    for it in range(args.num_its):
-        x_batch, g_batch, g_truth = next(data.loader_iter)
-        x_batch = x_batch.view(-1, data.x_dims)
-        loss = model.forward(x_batch, g_batch).mean()
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        losses.append(loss.item())
-
-        for n, p in model.named_parameters():
-            assert torch.isnan(p).sum() == 0, f"NaN in parameters {n}"
-
-        if it % 1000 == 0:
-            logging.info(f"It {it}. Loss: {np.mean(losses[-1000:]):.4f}.")
-            tb_writer.add_scalar('loss', np.mean(losses[-1000:]), it)
-
-    path = out_path(filename='model.pkl')
-    torch.save(model.state_dict(), path)
-    logging.info(f"Model saved to {path}")
-
+def plot(model, data, out_path, tb_writer, it):
     model.eval()
     for i in range(5):
         num_noise_samples = 1000
@@ -245,11 +210,73 @@ def main():
             alpha=1)
         ax.view_init(70, 30)
         plt.legend()
-        path = out_path(category='imgs', filename=f'{i}.png')
+        path = out_path(category=f'imgs/{it}', filename=f'{i}.png')
         plt.savefig(path)
-        tb_writer.add_image(f'samples-{i}', tensor_read_image(path))
+        tb_writer.add_image(f'samples-{i}', tensor_read_image(path), it)
         plt.show()
 
+
+def checkpoint(model, optimizer, path):
+    torch.save({
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+    }, path)
+
+
+def restore(model, optimizer, path):
+    data = torch.load(path)
+    if 'model' in data:
+        model.load_state_dict(data['model'])
+        optimizer.load_state_dict(data['optimizer'])
+    else:  # Backwards compatible
+        model.load_state_dict(data)
+
+
+def main():
+    parser = argparse.ArgumentParser('SO(3) multimodal conditional flow')
+    parser.add_argument('--name')
+    parser.add_argument('--flow_layers', type=int, default=18)
+    parser.add_argument('--noise', type=float, default=0.1)
+    parser.add_argument('--lr', type=float, default=1E-4)
+    parser.add_argument('--num_its', type=int, default=50000)
+    parser.add_argument('--load_path')
+    args = parser.parse_args()
+
+    tb_writer, out_path = setup_experiment('flow', args.name, args)
+
+    data = gen_data(noise=args.noise)
+    flow_model = Flow(3, data.x_dims, args.flow_layers)
+    model = FlowDistr(flow_model).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    if args.load_path:
+        restore(model, optimizer, args.load_path)
+
+    losses = []
+    for it in range(args.num_its):
+        model.train()
+        x_batch, g_batch, g_truth = next(data.loader_iter)
+        x_batch = x_batch.view(-1, data.x_dims)
+        loss = model.forward(x_batch, g_batch).mean()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+
+        for n, p in model.named_parameters():
+            assert torch.isnan(p).sum() == 0, f"NaN in parameters {n}"
+
+        if it % 1000 == 0:
+            logging.info(f"It {it}. Loss: {np.mean(losses[-1000:]):.4f}.")
+            tb_writer.add_scalar('loss', np.mean(losses[-1000:]), it)
+
+            save_path = out_path(filename='model.pkl')
+            checkpoint(model, optimizer, save_path)
+            if it % 5000 == 0:
+                plot(model, data, out_path, tb_writer, it)
+
+    logging.info(f"Model saved to {save_path}")
+    plot(model, data, out_path, tb_writer, args.num_its)
 
 
 if __name__ == '__main__':

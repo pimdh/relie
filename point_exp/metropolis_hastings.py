@@ -96,7 +96,7 @@ def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin = 0):
     l = [x.double()]
     for i in range(lenght - 1):
         x = mh_step(x, log_energy, kernel_gen)
-        l.append(x)
+        l.append(x.clone())
     return torch.stack(l[burnin:], 0)
 
 def so3_mh(log_energy, lenght, n_chains = 1, burnin = 0):

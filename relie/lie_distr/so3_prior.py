@@ -21,5 +21,5 @@ class SO3Prior(Distribution):
             .view(*shape, 3, 3)
 
     def log_prob(self, value):
-        return value.new_full(value.shape[:-2], 1 / (8 * np.pi ** 2))
+        return value.new_full(value.shape[:-2], np.log(1 / (8 * np.pi ** 2)))
 

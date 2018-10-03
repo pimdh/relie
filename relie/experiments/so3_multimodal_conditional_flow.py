@@ -216,6 +216,22 @@ def plot(model, data, out_path, tb_writer, it):
         plt.show()
 
 
+def checkpoint(model, optimizer, path):
+    torch.save({
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+    }, path)
+
+
+def restore(model, optimizer, path):
+    data = torch.load(path)
+    if 'model' in data:
+        model.load_state_dict(data['model'])
+        optimizer.load_state_dict(data['optimizer'])
+    else:  # Backwards compatible
+        model.load_state_dict(data)
+
+
 def main():
     parser = argparse.ArgumentParser('SO(3) multimodal conditional flow')
     parser.add_argument('--name')
@@ -230,11 +246,10 @@ def main():
     data = gen_data(noise=args.noise)
     flow_model = Flow(3, data.x_dims, args.flow_layers)
     model = FlowDistr(flow_model).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
 
     if args.load_path:
-        model.load_state_dict(torch.load(args.load_path))
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
+        restore(model, optimizer, args.load_path)
 
     losses = []
     for it in range(args.num_its):
@@ -254,14 +269,12 @@ def main():
             tb_writer.add_scalar('loss', np.mean(losses[-1000:]), it)
 
             save_path = out_path(filename='model.pkl')
-            torch.save(model.state_dict(), save_path)
-            if it % 1000 == 0:
+            checkpoint(model, optimizer, save_path)
+            if it % 5000 == 0:
                 plot(model, data, out_path, tb_writer, it)
 
     logging.info(f"Model saved to {save_path}")
     plot(model, data, out_path, tb_writer, args.num_its)
-
-
 
 
 if __name__ == '__main__':

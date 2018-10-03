@@ -85,6 +85,8 @@ class LocalDiffeoTransformedDistribution(Distribution):
     def _log_prob(self, y, transforms):
         # TODO: fix dtypes
         event_dim = len(self.event_shape)
+        assert torch.isnan(y).sum() == 0
+        assert (y.abs() == float('inf')).any() == 0
         if not transforms:
             log_prob = _sum_rightmost(
                 self.base_dist.log_prob(y),

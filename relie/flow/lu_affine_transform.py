@@ -1,4 +1,7 @@
+import math
+
 import torch
+from torch import nn as nn
 from torch.distributions import Transform, constraints
 from torch.distributions.utils import lazy_property
 
@@ -17,6 +20,7 @@ class LUAffineTransform(Transform):
     domain = constraints.real
     codomain = constraints.real
     bijective = True
+    event_dim = 1
 
     def __init__(self, lower, upper, diag, bias, cache_size=1):
         super().__init__(cache_size=cache_size)
@@ -50,4 +54,16 @@ class LUAffineTransform(Transform):
         return (y - self.bias) @ self.w_inv.t()
 
     def log_abs_det_jacobian(self, x, y):
-        return self.diag.abs().log().sum().expand(x.shape[0])
+        return self.diag.abs().log().sum(-1)
+
+
+def lu_affine_transform_parameters(d):
+    # stdv = 1. / math.sqrt(d) / 100
+    stdv = 0.
+    tensors = {
+        'lower': torch.Tensor(d, d).uniform_(-stdv, stdv),
+        'upper': torch.Tensor(d, d).uniform_(-stdv, stdv),
+        'diag': torch.Tensor(d).uniform_(-stdv, stdv) + 1,
+        'bias': torch.Tensor(d).uniform_(-stdv, stdv),
+    }
+    return nn.ParameterDict({k: nn.Parameter(t) for k, t in tensors.items()})

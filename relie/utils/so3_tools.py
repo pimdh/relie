@@ -78,7 +78,7 @@ def so3_log(r):
     log = ratio * anti_sym
 
     # Separately handle theta close to pi
-    mask = (cos_theta[..., 0, 0].abs() > 1-1E-5).nonzero()
+    mask = (theta[..., 0, 0] > math.pi-1E-3).nonzero()
     if mask.numel():
         log[mask[:, 0]] = so3_log_pi(r[mask[:, 0]], theta[mask[:, 0]])
 
@@ -144,13 +144,18 @@ def so3_log_abs_det_jacobian(x):
     Return element wise log abs det jacobian of exponential map
     :param x: Algebra tensor of shape (..., 3)
     :return: Tensor of shape (..., 3)
+
+    Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
     """
     x_norm = x.double().norm(dim=-1)
-    ratio = (2 - 2 * torch.cos(x_norm)) / x_norm ** 2
+    mask = x_norm > 1E-10
+    x_norm = torch.where(mask, x_norm, torch.ones_like(x_norm))
 
-    # Removable pole: (2-2 cos x)/x^2 -> 1-x^2/12 as x->0
-    mask = x_norm < 1E-10
-    ratio.masked_scatter_(mask, 1 - x_norm[mask] ** 2 / 12)
+    ratio = torch.where(
+        mask,
+        (2 - 2 * torch.cos(x_norm)) / x_norm ** 2,
+        1 - x_norm ** 2 / 12,
+    )
     return torch.log(ratio).to(x.dtype)
 
 
@@ -237,76 +242,6 @@ def quaternions_to_so3_matrix(q):
     ], -1).view(*q.shape[:-1], 3, 3)
 
 
-def _z_rot_mat(angle, l):
-    m = angle.new_zeros((angle.size(0), 2 * l + 1, 2 * l + 1))
-
-    inds = torch.arange(
-        0, 2 * l + 1, 1, dtype=torch.long, device=angle.device)
-    reversed_inds = torch.arange(
-        2 * l, -1, -1, dtype=torch.long, device=angle.device)
-
-    frequencies = torch.arange(
-        l, -l - 1, -1, dtype=angle.dtype, device=angle.device)[None]
-
-    m[:, inds, reversed_inds] = torch.sin(frequencies * angle[:, None])
-    m[:, inds, inds] = torch.cos(frequencies * angle[:, None])
-    return m
-
-
-class JContainer:
-    data = {}
-
-    @classmethod
-    def get(cls, device):
-        if str(device) in cls.data:
-            return cls.data[str(device)]
-
-        from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
-            import Jd as Jd_np
-
-        device_data = [torch.tensor(J, dtype=torch.float32, device=device)
-                       for J in Jd_np]
-        cls.data[str(device)] = device_data
-
-        return device_data
-
-
-def wigner_d_matrix(angles, degree):
-    """Create wigner D matrices for batch of ZYZ Euler anglers for degree l."""
-    J = JContainer.get(angles.device)[degree][None]
-    x_a = _z_rot_mat(angles[:, 0], degree)
-    x_b = _z_rot_mat(angles[:, 1], degree)
-    x_c = _z_rot_mat(angles[:, 2], degree)
-    return x_a.matmul(J).matmul(x_b).matmul(J).matmul(x_c)
-
-
-def block_wigner_matrix_multiply(angles, data, max_degree):
-    """Transform data using wigner d matrices for all degrees.
-
-    vector_dim is dictated by max_degree by the expression:
-    vector_dim = \sum_{i=0}^max_degree (2 * max_degree + 1) = (max_degree+1)^2
-
-    The representation is the direct sum of the irreps of the degrees up to max.
-    The computation is equivalent to a block-wise matrix multiply.
-
-    The data are the Fourier modes of a R^{data_dim} signal.
-
-    Input:
-    - angles (batch, 3)  ZYZ Euler angles
-    - vector (batch, vector_dim, data_dim)
-
-    Output: (batch, vector_dim, data_dim)
-    """
-    outputs = []
-    start = 0
-    for degree in range(max_degree+1):
-        dim = 2 * degree + 1
-        matrix = wigner_d_matrix(angles, degree)
-        outputs.append(matrix.bmm(data[:, start:start+dim, :]))
-        start += dim
-    return torch.cat(outputs, 1)
-
-
 def random_quaternions(n, dtype=torch.float32, device=None):
     u1, u2, u3 = torch.rand(3, n, dtype=dtype, device=device)
     return torch.stack((
@@ -317,5 +252,20 @@ def random_quaternions(n, dtype=torch.float32, device=None):
     ), 1)
 
 
+def so3_uniform_random(n, dtype=torch.float32, device=None):
+    return quaternions_to_so3_matrix(random_quaternions(n, dtype, device))
+
+
 def so3_inv(el):
     return el.transpose(-2, -1)
+
+
+def s2s2_gram_schmidt(v1, v2):
+    """Normalise 2 3-vectors. Project second to orthogonal component.
+    Take cross product for third. Stack to form SO matrix."""
+    u1 = v1
+    e1 = u1 / u1.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    u2 = v2 - (e1 * v2).sum(-1, keepdim=True) * e1
+    e2 = u2 / u2.norm(p=2, dim=-1, keepdim=True).clamp(min=1E-5)
+    e3 = torch.cross(e1, e2)
+    return torch.stack([e1, e2, e3], 1)

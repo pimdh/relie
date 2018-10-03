@@ -2,10 +2,14 @@ import math
 import torch
 from torch.distributions import Transform, constraints
 
+from relie.utils.numerical import atanh
+
 
 class RadialTanhTransform(Transform):
     r"""
     Transform R^d of radius (0, inf) to (0, R)
+
+    Uses the fact that tanh is linear near 0.
     """
     domain = constraints.real
     codomain = constraints.real
@@ -18,36 +22,27 @@ class RadialTanhTransform(Transform):
 
     def _call(self, x):
         x_norm = x.norm(dim=-1, keepdim=True)
-        x_normed = x / x_norm
-        y = torch.tanh(x_norm) * x_normed * self.radius
+        mask = x_norm > 1E-8
+        x_norm = torch.where(mask, x_norm, torch.ones_like(x_norm))
 
         return torch.where(
-            x_norm > 1E-8,
-            y,
+            mask,
+            torch.tanh(x_norm) * x / x_norm * self.radius,
             x * self.radius
         )
 
     def _inverse(self, y):
+        org_dtype = y.dtype
+        y = y.double()
         y_norm = y.norm(dim=-1, keepdim=True)
-        y_normed = y / y_norm
-        x = self.tanh_inverse(y_norm / self.radius) * y_normed
+        mask = y_norm > 1E-8
+        y_norm = torch.where(mask, y_norm, torch.ones_like(y_norm))
 
         return torch.where(
-            y_norm > 1E-8,
-            x,
+            mask,
+            atanh(y_norm / self.radius) * y / y_norm,
             y / self.radius
-        )
-
-    @staticmethod
-    def tanh_inverse(y):
-        """
-        Inverse tanh.
-
-        From: http://mathworld.wolfram.com/InverseHyperbolicTangent.html
-        :param y: tensor
-        :return: tensor
-        """
-        return .5 * (torch.log1p(y) - torch.log1p(-y))
+        ).to(org_dtype)
 
     def log_abs_det_jacobian(self, x, y):
         """

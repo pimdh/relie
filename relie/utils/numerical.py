@@ -18,3 +18,19 @@ def sample_ball(n, d, device=None, dtype=None):
 def zero_one_outer_product(n, dtype=None, device=None):
     return torch.tensor(
         list(product([0, 1], repeat=n)), dtype=dtype, device=device)
+
+
+class AtanhFunction(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return .5 * (torch.log1p(x) - torch.log1p(-x))
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x, = ctx.saved_tensors
+        grad = 1 / (1 - x ** 2)
+        return grad * grad_output
+
+
+atanh = AtanhFunction.apply

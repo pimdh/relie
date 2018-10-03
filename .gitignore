@@ -3,3 +3,4 @@
 .ipynb_checkpoints
 point_exp/logs/*
 models
+outputs

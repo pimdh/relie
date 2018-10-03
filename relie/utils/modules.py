@@ -81,7 +81,7 @@ class ToTransform(Transform):
     def _call(self, x):
         return x.to(**self.options_out)
 
-    def _inv_call(self, y):
+    def _inverse(self, y):
         return y.to(**self.options_in)
 
     def log_abs_det_jacobian(self, x, y):

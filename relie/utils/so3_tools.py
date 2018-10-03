@@ -127,7 +127,7 @@ def so3_log_pi(r, theta):
 
 def so3_xset(x, k_max):
     """
-    Return set of x's that have same image as exp(x).
+    Return set of x's that have same image as exp(x) excluding x itself.
     :param x: Tensor of shape (..., 3) of algebra elements.
     :param k_max: int. Number of 2pi shifts in either direction
     :return: Tensor of shape (2 * k_max+1, ..., 3)
@@ -135,7 +135,8 @@ def so3_xset(x, k_max):
     x = x[None]
     x_norm = x.norm(dim=-1, keepdim=True)
     shape = [-1, *[1]*(x.dim()-1)]
-    k_range = torch.arange(-k_max, k_max+1, dtype=x.dtype, device=x.device).view(shape)
+    k_range = torch.arange(1, k_max+1, dtype=x.dtype, device=x.device)
+    k_range = torch.cat([-k_range, k_range]).view(shape)
     return x / x_norm * (x_norm + 2 * math.pi * k_range)
 
 

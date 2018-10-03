@@ -17,7 +17,7 @@ Data generation:
 import argparse
 import logging
 import numpy as np
-from relie.utils.experiment import setup_experiment
+from relie.utils.experiment import setup_experiment, tensor_read_image
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
@@ -189,6 +189,7 @@ def main():
     parser.add_argument('--name')
     parser.add_argument('--flow_layers', type=int, default=18)
     parser.add_argument('--noise', type=float, default=0.1)
+    parser.add_argument('--num_its', type=int, default=50000)
     args = parser.parse_args()
 
     tb_writer, out_path = setup_experiment('flow', args.name, args)
@@ -199,8 +200,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=1E-4)
 
     losses = []
-    num_its = 50000
-    for it in range(num_its):
+    for it in range(args.num_its):
         x_batch, g_batch, g_truth = next(data.loader_iter)
         x_batch = x_batch.view(-1, data.x_dims)
         loss = model.forward(x_batch, g_batch).mean()
@@ -216,10 +216,9 @@ def main():
             logging.info(f"It {it}. Loss: {np.mean(losses[-1000:]):.4f}.")
             tb_writer.add_scalar('loss', np.mean(losses[-1000:]), it)
 
-    if num_its > 0:
-        path = out_path(filename='model.pkl')
-        torch.save(model.state_dict(), path)
-        logging.info(f"Model saved to {path}")
+    path = out_path(filename='model.pkl')
+    torch.save(model.state_dict(), path)
+    logging.info(f"Model saved to {path}")
 
     model.eval()
     for i in range(5):
@@ -246,8 +245,11 @@ def main():
             alpha=1)
         ax.view_init(70, 30)
         plt.legend()
-        plt.savefig(out_path(category='imgs', filename=f'{i}.png'))
+        path = out_path(category='imgs', filename=f'{i}.png')
+        plt.savefig(path)
+        tb_writer.add_image(f'samples-{i}', tensor_read_image(path))
         plt.show()
+
 
 
 if __name__ == '__main__':

@@ -1,3 +1,6 @@
+from PIL import Image
+import numpy as np
+import torch
 import matplotlib
 import os
 import sys
@@ -69,3 +72,9 @@ def setup_experiment(experiment_name, run_name, args):
     tb_writer = SummaryWriter(out_path(category='tb'))
 
     return tb_writer, out_path
+
+
+def tensor_read_image(path):
+    img = Image.open(path).convert('RGB')
+    t = torch.tensor(np.array(img)).permute([2, 0, 1]).float() / 255
+    return t

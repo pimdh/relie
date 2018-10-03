@@ -5,10 +5,11 @@ from torch.distributions import Normal
 
 
 from relie.flow import LocalDiffeoTransformedDistribution as LDTD
-from relie.lie_distr import SO3ExpTransform, SO3Prior
+from relie.lie_distr import SO3ExpTransform
 
 
-class PushedNormal(nn.Module): 
+# noinspection PyCallingNonCallable
+class PushedNormalSO3(nn.Module):
     
     """
     A nn.Module that wraps a Normal pushed to SO(3) 
@@ -23,7 +24,11 @@ class PushedNormal(nn.Module):
         self.loc = nn.Parameter(torch.tensor([0.,0,0], dtype=torch.float64))
         
     def rsample(self, size):
-        
+        """
+        sample from distribution
+        :param size: size of sample, torch.Size()
+        :return:
+        """
         alg_distr = Normal(self.loc.data, F.softplus(self.pre_scale))
         p = LDTD(alg_distr, SO3ExpTransform())
         return p.rsample(size)

@@ -1,6 +1,6 @@
 import math
 import torch
-from torch.distributions import constraints
+from torch.distributions import constraints, Transform
 
 from relie.flow import LocalDiffeoTransform
 from relie.utils.so3_tools import so3_exp, so3_log, so3_vee, so3_xset,\
@@ -67,6 +67,32 @@ class SO3ExpCompactTransform(LocalDiffeoTransform):
         mask = norms < self.support_radius
         xset.masked_fill_(1-mask[..., None], 0)
         return x, xset, mask
+
+    def log_abs_det_jacobian(self, x, y):
+        """
+        Log abs det of forward jacobian of exp map.
+        :param x: Algebra element shape (..., 3)
+        :param y: Group element (..., 3, 3)
+        :return: Jacobian of exp shape (...)
+        """
+        return so3_log_abs_det_jacobian(x).float()
+
+
+class SO3ExpBijectiveTransform(Transform):
+    """Assumes underlying distribution has support only in the <pi ball."""
+    domain = constraints.real
+    codomain = constraints.real
+
+    event_dim = 1
+
+    def __init__(self):
+        super().__init__(1)
+
+    def _call(self, x):
+        return so3_exp(x)
+
+    def _inverse(self, y):
+        return so3_vee(so3_log(y))
 
     def log_abs_det_jacobian(self, x, y):
         """

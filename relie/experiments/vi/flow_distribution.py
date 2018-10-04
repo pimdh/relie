@@ -7,7 +7,7 @@ from torch.distributions import ComposeTransform, Normal
 
 from relie.flow import BatchNormTransform, CouplingTransform, PermuteTransform, RadialTanhTransform, \
     LocalDiffeoTransformedDistribution as LDTD
-from relie.lie_distr import SO3ExpCompactTransform
+from relie.lie_distr import SO3ExpCompactTransform, SO3ExpBijectiveTransform
 from relie.utils.modules import MLP, BatchSqueezeModule, ToTransform
 
 
@@ -32,6 +32,8 @@ class Flow(nn.Module):
         if batch_norm:
             self.batch_norms = nn.ModuleList([
                 nn.BatchNorm1d(d) for _ in range(n_layers)])
+            for bn in self.batch_norms:
+                bn.weight.data = torch.ones_like(bn.weight.data)
         else:
             self.batch_norms = [None] * n_layers
 
@@ -70,11 +72,11 @@ class FlowDistribution(nn.Module):
         self.algebra_support_radius = algebra_support_radius
 
     def transforms(self):
-        transforms = [
-            self.flow(),
-            self.intermediate_transform,
-            SO3ExpCompactTransform(self.algebra_support_radius),
-        ]
+        if self.algebra_support_radius <= math.pi:
+            t = SO3ExpBijectiveTransform()
+        else:
+            t = SO3ExpCompactTransform(self.algebra_support_radius)
+        transforms = [self.flow(), self.intermediate_transform, t]
         return transforms
 
     def forward(self):

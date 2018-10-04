@@ -39,7 +39,7 @@ def assert_reconstruction(x, x_recon):
     assert_array_almost_equal(diff, torch.zeros_like(diff))
 
     # Test xset
-    xset = so3_xset(x, 1)
+    xset = torch.cat([x[None], so3_xset(x, 1)])
     diff = (xset - x_recon[None]).abs().sum(2).min(dim=0)[0]
     assert_array_almost_equal(diff, torch.zeros_like(diff), 5)
 

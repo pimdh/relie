@@ -43,17 +43,26 @@ def so3_exp(v):
     :return: group element of shape (..., 3, 3)
     """
     assert v.dtype == torch.double
-    theta = v.norm(p=2, dim=-1, keepdim=True)
-    # k = so3_hat(v / theta)
+    theta = v.norm(p=2, dim=-1)
 
-    v_normed = v / theta
-    v_normed[theta[..., 0] < 1E-20] = 0
-    k = so3_hat(v_normed)
+    mask = theta > 1E-10
+    theta = torch.where(mask, theta, torch.ones_like(theta))
 
+    # sin(x)/x -> 1-x^2/6 as x->0
+    alpha = torch.where(
+        mask,
+        torch.sin(theta) / theta,
+        1 - theta ** 2 / 6
+    )
+    # (1-cos(x))/x^2 -> 0.5-x^2/24 as x->0
+    beta = torch.where(
+        mask,
+        (1-torch.cos(theta)) / theta ** 2,
+        .5 - theta ** 2 / 24,
+    )
     eye = torch.eye(3, device=v.device, dtype=v.dtype)
-    r = eye + torch.sin(theta)[..., None]*k \
-        + (1. - torch.cos(theta))[..., None]*(k@k)
-    return r
+    x = so3_hat(v)
+    return eye + alpha[..., None, None] * x + beta[..., None, None] * x @ x
 
 
 def so3_log(r):
@@ -78,7 +87,7 @@ def so3_log(r):
     log = ratio * anti_sym
 
     # Separately handle theta close to pi
-    mask = (theta[..., 0, 0] > math.pi-1E-3).nonzero()
+    mask = ((math.pi - theta[..., 0, 0]).abs() < 1E-2).nonzero()
     if mask.numel():
         log[mask[:, 0]] = so3_log_pi(r[mask[:, 0]], theta[mask[:, 0]])
 

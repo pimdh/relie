@@ -5,7 +5,7 @@ from torch.distributions import Normal, Uniform
 from relie.flow import LocalDiffeoTransformedDistribution as LDTD
 from relie.lie_distr import SO3ExpTransform, SO3Prior, SO3MultiplyTransform
 
-def so3_kernel_gen(centers, scale = torch.ones(3).double()):
+def so3_kernel_gen(centers, scale = torch.ones(3).double()*0.1):
     """
     Given centers it outputs transition kernels around the centers
     the kernels will be normals centered at <centers>

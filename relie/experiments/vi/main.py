@@ -21,7 +21,7 @@ import math
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
-
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -32,6 +32,8 @@ from relie.lie_distr import SO3Prior
 from relie.utils.so3_tools import so3_log, so3_vee
 from relie.geometry import cyclic_coordinates, invariant_loss, cyclic_permutations, rotation_matrices
 
+from point_exp.metropolis_hastings import so3_mh
+
 torch.manual_seed(0)
 
 # Ranodm pointcloud
@@ -40,12 +42,13 @@ torch.manual_seed(0)
 
 
 # Two points
-# x_zero = torch.tensor(cyclic_coordinates(2)).double()
-# symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
+x_zero = torch.tensor(cyclic_coordinates(2)).double()
+symmetry = np.eye(3)[None,...]
+#symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
 
 # Equilateral triangle
-x_zero = torch.tensor(cyclic_coordinates(3)).double()
-symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
+# x_zero = torch.tensor(cyclic_coordinates(3)).double()
+# symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
 
 g_zero = SO3Prior(dtype=torch.double).sample((1,))[0]
 # g_zero = torch.eye(3, dtype=torch.double)
@@ -91,19 +94,63 @@ class VIModel(nn.Module):
         }
 
 
-def plot_group_samples(model):
+def plot_group_samples(model, true_post = None):
     model.eval()
     num_noise_samples = 1000
+    true_post_ = true_post.view(-1,9)
     inferred_distr = model.distr()
     inferred_samples = inferred_distr.sample((num_noise_samples, )).view(-1, 9)
-    pca = PCA(3).fit(inferred_samples)
+
+    if true_post is not None:
+        samples = torch.cat([inferred_samples, true_post_],0)
+    else:
+        samples = inferred_samples
+
+    pca = PCA(3).fit(samples)
+
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(*pca.transform(inferred_samples).T, label="Model samples", alpha=.1)
+    ax.scatter(*pca.transform(inferred_samples).T, label="Model samples", alpha=.1, color="r")
+    ax.scatter(*pca.transform(true_post_).T, label="Model samples", alpha=.1, color="b")
     ax.view_init(70, 30)
     # plt.legend()
+    plt.tight_layout()
     plt.show()
+
+
+def plot_samples(samples):
+
+    samples_ = samples.view(-1, 9)
+    pca = PCA(3).fit(samples_)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(*pca.transform(samples_).T, label="Model samples", alpha=.1)
+    ax.view_init(70, 30)
+    # proj_samples = pca.transform(samples_)
+    # print(proj_samples.shape)
+    # mask = (proj_samples[:,0]**2<0.1)+(proj_samples[:,1]**2<0.1)+(proj_samples[:,2]**2<0.1)
+    # print(samples.numpy()[mask])
+    # plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# running MH
+def log_energy(g):
+    return -  2 * prediction_loss_fn(g, x, x_zero)
+
+true_post = so3_mh(log_energy, 1000, 1000)[-1]
+
+plot_samples(true_post)
+
+mask = log_energy(true_post) > - 0.5
+
+plot_samples(true_post[mask])
+#print(log_energy(true_post[mask]))
+
+
 
 
 flow = Flow(3, 12, batch_norm=False)
@@ -128,7 +175,7 @@ for it in range(50000):
 
     if it % 1000 == 0:
         print_log_summary(it, 1000, infos)
-        plot_group_samples(model)
+        plot_group_samples(model, true_post)
         if model.distr is gaussian_distr:
             print(f"Parameters: {torch.cat([gaussian_distr.loc, gaussian_distr.scale]).tolist()}")
             print(f"Target at {g_zero_alg.tolist()}")

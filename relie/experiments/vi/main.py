@@ -29,17 +29,19 @@ from relie.utils.experiment import print_log_summary
 from relie.experiments.vi.flow_distribution import Flow, FlowDistribution
 from relie.experiments.vi.pushed_gaussian_distribution import PushedGaussianDistribution
 from relie.lie_distr import SO3Prior
-from relie.utils.so3_tools import so3_log, so3_vee
-from relie.geometry import cyclic_coordinates, invariant_loss, cyclic_permutations, rotation_matrices
+from relie.utils.so3_tools import so3_log, so3_vee, so3_matrix_to_eazyz
+from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
+from relie.geometry import cyclic_coordinates, invariant_loss, \
+    cyclic_permutations, rotation_matrices, tetrahedron_coordinates, \
+    tetrahedron_permutations
 
 from point_exp.metropolis_hastings import so3_mh
 
 torch.manual_seed(0)
 
-# Ranodm pointcloud
+# Random pointcloud
 # x_zero = torch.randn(100, 3, dtype=torch.double)
-# symmetry = torch.eye(3)[None].double()
-
+# symmetry = None
 
 # Two points
 x_zero = torch.tensor(cyclic_coordinates(2)).double()
@@ -47,8 +49,19 @@ symmetry = np.eye(3)[None,...]
 #symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
 
 # Equilateral triangle
-# x_zero = torch.tensor(cyclic_coordinates(3)).double()
-# symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
+x_zero = torch.tensor(cyclic_coordinates(3)).double()
+symmetry = rotation_matrices(cyclic_coordinates(3), cyclic_permutations(3))
+
+# Tetrahedron
+# x_zero = torch.tensor(tetrahedron_coordinates()).double()
+# symmetry = rotation_matrices(tetrahedron_coordinates(), tetrahedron_permutations())
+
+
+# Representation
+# x_zero = block_wigner_matrix_multiply(
+#     so3_matrix_to_eazyz(symmetry).float(),
+#     x_zero.expand(len(symmetry), -1, -1), 3)
+# x_zero = x_zero.mean(0)
 
 g_zero = SO3Prior(dtype=torch.double).sample((1,))[0]
 # g_zero = torch.eye(3, dtype=torch.double)
@@ -68,9 +81,10 @@ def prediction_loss_fn(g, x, x_zero):
     :param x_zero: (n, 3)
     :return: (b)
     """
+    sym = torch.eye(3)[None].double() if symmetry is None else symmetry
     y = torch.einsum('bij,nj->bni', [g, x_zero])  # [b, n, 3]
     x = x.expand_as(y)
-    l = invariant_loss(x.contiguous(), y.contiguous(), symmetry)
+    l = invariant_loss(x.contiguous(), y.contiguous(), sym)
     return l.mean(1)
 
 

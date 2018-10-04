@@ -123,7 +123,7 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-def gen_data(symmetry_group_size=3, noise=0.1):
+def gen_data(symmetry_group_size=3, noise=0.1, num_samples=100000):
     # Prior distribution p(G)
     generation_group_distr = SO3Prior(dtype=torch.double, device=device)
 
@@ -134,7 +134,6 @@ def gen_data(symmetry_group_size=3, noise=0.1):
     noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
     # Sample true and noisy group actions
-    num_samples = 100000
     noise_samples = noise_group_distr.sample((num_samples, ))
     group_data = generation_group_distr.sample((num_samples, ))
     group_data_noised = noise_samples @ group_data
@@ -246,12 +245,13 @@ def main():
     parser.add_argument('--noise', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=1E-4)
     parser.add_argument('--num_its', type=int, default=50000)
+    parser.add_argument('--num_samples', type=int, default=100000)
     parser.add_argument('--load_path')
     args = parser.parse_args()
 
     tb_writer, out_path = setup_experiment('flow', args.name, args)
 
-    data = gen_data(noise=args.noise)
+    data = gen_data(noise=args.noise, num_samples=args.num_samples)
     flow_model = Flow(3, data.x_dims, args.flow_layers)
     model = FlowDistr(flow_model).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)

@@ -17,13 +17,16 @@ class PushedGaussianDistribution(nn.Module):
         self.transform = SO3ExpTransform(k_max=3)
         self.lie_multiply = lie_multiply
 
+    @property
+    def scale(self):
+        return F.softplus(self.pre_scale)
+
     def forward(self):
-        scale = F.softplus(self.pre_scale)
         if self.lie_multiply:
-            alg_distr = Normal(torch.zeros(3).double(), scale)
+            alg_distr = Normal(torch.zeros(3).double(), self.scale)
             loc = so3_exp(self.loc)
             transforms = [self.transform, SO3MultiplyTransform(loc)]
         else:
-            alg_distr = Normal(self.loc * 1, scale)
+            alg_distr = Normal(self.loc * 1, self.scale)
             transforms = [self.transform]
         return LDTD(alg_distr, transforms)

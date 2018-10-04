@@ -12,6 +12,7 @@ import secrets
 from datetime import datetime
 from tensorboardX import SummaryWriter
 from subprocess import check_output
+from collections import OrderedDict
 
 if not environ.get('DISPLAY', ''):
     matplotlib.use("Agg")
@@ -78,3 +79,20 @@ def tensor_read_image(path):
     img = Image.open(path).convert('RGB')
     t = torch.tensor(np.array(img)).permute([2, 0, 1]).float() / 255
     return t
+
+
+def combine_logs(logs):
+    keys = sorted(logs[-1].keys())
+    return OrderedDict([(k, np.array([r[k] for r in logs])) for k in keys])
+
+
+def mean_logs(logs):
+    return OrderedDict((k, v.mean()) for k, v in combine_logs(logs).items())
+
+
+def print_log_summary(it, report_freq, results):
+    res = combine_logs(results[-report_freq:])
+    entries = ["{}={:.4f}".format(k, values.mean()) for k, values in res.items()]
+    out = "{}: {}".format(it, " ".join(entries))
+    print(out)
+

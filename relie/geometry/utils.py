@@ -26,5 +26,14 @@ def rotation_matrices(coordinates, permutations):
         x_permuted = perm @ x
         # Y = X @ R.T  => R.T = X^+ @ Y
         r = (np.linalg.pinv(x) @ x_permuted).T
+
         rs.append(r)
-    return np.stack(rs)
+    rs = np.stack(rs)
+    # For 2D subspaces, fix
+    if (x[:, 2] == 0).all():
+        rs[:, 2, :] = 0.
+        rs[:, :, 2] = 0.
+        rs[:, 2, 2] = 1.
+    return rs
+
+

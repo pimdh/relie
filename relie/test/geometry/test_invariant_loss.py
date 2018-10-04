@@ -1,14 +1,13 @@
 import torch
-from relie.geometry import tetrahedron
-from relie.geometry import invariant_loss
+from relie.geometry import invariant_loss, tetrahedron_coordinates, tetrahedron_permutations, rotation_matrices, permutation_matrices
 from numpy.testing import assert_array_equal
 from relie.utils.so3_tools import so3_uniform_random
 
 
 def test_invariant_loss():
-    x = torch.from_numpy(tetrahedron.coordinates()).float()
-    permutations = torch.from_numpy(tetrahedron.permutations()).float()
-    rotations = torch.from_numpy(tetrahedron.rotations()).float()
+    x = torch.from_numpy(tetrahedron_coordinates()).float()
+    permutations = torch.from_numpy(permutation_matrices(tetrahedron_permutations())).float()
+    rotations = torch.from_numpy(rotation_matrices(tetrahedron_coordinates(), tetrahedron_permutations())).float()
     for p in permutations:
         y = p @ x
         l = invariant_loss(x, y, rotations)

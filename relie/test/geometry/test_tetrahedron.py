@@ -1,11 +1,11 @@
 from numpy.testing import assert_array_equal
-from relie.geometry.tetrahedron import *
+from relie.geometry import *
 
 
 def test_rotations():
-    perms = permutations()
-    rs = rotations()
-    coords = coordinates()
+    permutations = permutation_matrices(tetrahedron_permutations())
+    rotations = rotation_matrices(tetrahedron_coordinates(), tetrahedron_permutations())
+    coords = tetrahedron_coordinates()
 
-    for p, r in zip(perms, rs):
+    for p, r in zip(permutations, rotations):
         assert_array_equal(p @ coords, coords @ r.T)

@@ -123,7 +123,7 @@ class FlowDistr(nn.Module):
         return -log_prob
 
 
-def gen_data(symmetry_group_size=3, noise=0.1):
+def gen_data(symmetry_group_size=3, noise=0.1, num_samples=100000):
     # Prior distribution p(G)
     generation_group_distr = SO3Prior(dtype=torch.double, device=device)
 
@@ -134,7 +134,6 @@ def gen_data(symmetry_group_size=3, noise=0.1):
     noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
     # Sample true and noisy group actions
-    num_samples = 100000
     noise_samples = noise_group_distr.sample((num_samples, ))
     group_data = generation_group_distr.sample((num_samples, ))
     group_data_noised = noise_samples @ group_data
@@ -197,6 +196,12 @@ def plot(model, data, out_path, tb_writer, it):
         inferred_distr = model.distr(x.view(-1).expand(num_noise_samples, -1))
         samples = inferred_distr.sample((num_noise_samples, )).view(
             num_noise_samples, 9)
+        mask = np.isfinite(samples).any(dim=1)
+        if np.logical_not(mask).any():
+            fails = np.logical_not(mask).sum()
+            print(f"Failed to sample {fails} elements, filtering")
+            samples = samples[mask]
+
         # pca = PCA(3).fit(g_subgroup.view(4, 9))
         pca = PCA(3).fit(samples)
 
@@ -214,6 +219,7 @@ def plot(model, data, out_path, tb_writer, it):
         plt.savefig(path)
         tb_writer.add_image(f'samples-{i}', tensor_read_image(path), it)
         plt.show()
+        plt.close()
 
 
 def checkpoint(model, optimizer, path):
@@ -239,12 +245,13 @@ def main():
     parser.add_argument('--noise', type=float, default=0.1)
     parser.add_argument('--lr', type=float, default=1E-4)
     parser.add_argument('--num_its', type=int, default=50000)
+    parser.add_argument('--num_samples', type=int, default=100000)
     parser.add_argument('--load_path')
     args = parser.parse_args()
 
     tb_writer, out_path = setup_experiment('flow', args.name, args)
 
-    data = gen_data(noise=args.noise)
+    data = gen_data(noise=args.noise, num_samples=args.num_samples)
     flow_model = Flow(3, data.x_dims, args.flow_layers)
     model = FlowDistr(flow_model).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)

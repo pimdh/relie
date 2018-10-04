@@ -1,4 +1,6 @@
+import math
 import torch
+import torch.nn.functional as F
 from torch.distributions import Transform, constraints
 
 
@@ -22,8 +24,8 @@ class CouplingTransform(Transform):
 
     def _call(self, x):
         x_transform, x_residue = self.partition(x)
-        log_s, bias = self.f_split(x_residue)
-        s = torch.exp(log_s)
+        pre_s, bias = self.f_split(x_residue)
+        s = F.softplus(pre_s + math.log(math.e - 1))
         self._cached_s = s
         y_transform = s * x_transform + bias
         y = torch.cat([y_transform, x_residue], -1)
@@ -31,8 +33,8 @@ class CouplingTransform(Transform):
 
     def _inverse(self, y):
         y_transform, y_residue = self.partition(y)
-        log_s, bias = self.f_split(y_residue)
-        s = torch.exp(log_s)
+        pre_s, bias = self.f_split(y_residue)
+        s = F.softplus(pre_s + math.log(math.e - 1))
         x_transform = (y_transform - bias) / s
         x = torch.cat([x_transform, y_residue], -1)
         return x
@@ -41,8 +43,8 @@ class CouplingTransform(Transform):
         s = self._get_cached_s(x)
         if s is None:
             x_residue = self.partition(x)[1]
-            log_s, _ = self.f_split(x_residue)
-            s = torch.exp(log_s)
+            pre_s, _ = self.f_split(x_residue)
+            s = F.softplus(pre_s + math.log(math.e - 1))
         return s.abs().log().sum(-1)
 
     def _get_cached_s(self, x):

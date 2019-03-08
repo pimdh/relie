@@ -5,7 +5,8 @@ from torch.distributions import Normal, Uniform
 from relie.flow import LocalDiffeoTransformedDistribution as LDTD
 from relie.lie_distr import SO3ExpTransform, SO3Prior, SO3MultiplyTransform
 
-def so3_kernel_gen(centers, scale = torch.ones(3).double()*0.1):
+
+def so3_kernel_gen(centers, scale=torch.ones(3).double() * 0.1):
     """
     Given centers it outputs transition kernels around the centers
     the kernels will be normals centered at <centers>
@@ -15,18 +16,18 @@ def so3_kernel_gen(centers, scale = torch.ones(3).double()*0.1):
     
     returns: a torch.distribution
     """
-    
-    
+
     expand_dims = centers.shape[:-2]
-    exp_scale = scale.expand(*expand_dims,-1).double()
-    
-    loc = torch.zeros(3).expand(*expand_dims,-1).double()
+    exp_scale = scale.expand(*expand_dims, -1).double()
+
+    loc = torch.zeros(3).expand(*expand_dims, -1).double()
     alg_distr = Normal(loc, scale)
-    ker = LDTD(alg_distr, SO3ExpTransform(k_max = 20))
+    ker = LDTD(alg_distr, SO3ExpTransform(k_max=20))
     ker = LDTD(ker, SO3MultiplyTransform(centers))
     return ker
 
-def r_kernel_gen(centers, scale = torch.ones(1).double()):
+
+def r_kernel_gen(centers, scale=torch.ones(1).double()):
     """
     Given centers it outputs transition kernels around the centers
     the kernels will be normals centered at <centers>
@@ -36,11 +37,12 @@ def r_kernel_gen(centers, scale = torch.ones(1).double()):
     
     returns: a torch.distribution
     """
-    
+
     dim = centers.shape[0]
     exp_scale = scale.expand(dim, -1).double()
     ker = Normal(centers, exp_scale)
     return ker
+
 
 def mh_step(x, log_energy, kernel_gen):
     """
@@ -55,26 +57,30 @@ def mh_step(x, log_energy, kernel_gen):
     
     returns: a tensor of shape (batch_dims, distr_dims) of the new samples
     """
-    
+
     s = torch.Size((1,))
     x = x.double()
     ker = kernel_gen(x)
     x1 = ker.sample(s).squeeze(0)
     ker1 = kernel_gen(x1)
-    
+
     log_p_x1_x = ker.log_prob(x1).double()
     log_p_x_x1 = ker1.log_prob(x).double()
     log_acceptance = log_energy(x1) - log_energy(x) + log_p_x_x1 - log_p_x1_x
-    u = Uniform(torch.zeros(log_acceptance.shape).double(), torch.ones(log_acceptance.shape).double())
-    
+    u = Uniform(
+        torch.zeros(log_acceptance.shape).double(),
+        torch.ones(log_acceptance.shape).double(),
+    )
+
     acceptance_mask = u.sample(s).log().squeeze(0) <= log_acceptance
-    
+
     x[acceptance_mask] = x1[acceptance_mask]
-    
+
     return x
 
-def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin = 0):
-    
+
+def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin=0):
+
     """
     Given log_energ, a transition kernel genrator and a prior i runs the metropolis hastings algorithm
     for <lenght> steps and <n_chains> markov chains, discading the first <burnin> samples
@@ -99,5 +105,6 @@ def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin = 0):
         l.append(x.clone())
     return torch.stack(l[burnin:], 0)
 
-def so3_mh(log_energy, lenght, n_chains = 1, burnin = 0):
+
+def so3_mh(log_energy, lenght, n_chains=1, burnin=0):
     return mh(log_energy, lenght, n_chains, so3_kernel_gen, SO3Prior(), burnin)

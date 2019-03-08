@@ -30,7 +30,7 @@ from relie.utils.so3_tools import so3_matrix_to_eazyz
 from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
 from relie.utils.modules import MLP
 
-device = torch.device('cpu')
+device = torch.device("cpu")
 
 # Prior distribution p(G)
 # generation_alg_distr = Normal(torch.tensor([0., .5, -.5,]), torch.tensor([0.5, .1, 1.]))
@@ -38,11 +38,13 @@ device = torch.device('cpu')
 generation_group_distr = SO3Prior(dtype=torch.double)
 
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
-noise_alg_distr = Normal(torch.tensor([0., 0., 0.,]).double(), torch.tensor([.1, .1, .1]).double())
+noise_alg_distr = Normal(
+    torch.tensor([0.0, 0.0, 0.0]).double(), torch.tensor([0.1, 0.1, 0.1]).double()
+)
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
-num_samples = 100000
+num_samples = 100_000
 noise_samples = noise_group_distr.sample((num_samples,))
 group_data = generation_group_distr.sample((num_samples,))
 group_data_noised = noise_samples @ group_data
@@ -54,9 +56,11 @@ target_entropy = -noise_group_distr.log_prob(noise_samples).mean()
 angles = so3_matrix_to_eazyz(group_data)
 max_rep_degree = 3
 rep_copies = 1
-x_dims = (max_rep_degree+1) ** 2 * rep_copies
-x_zero = torch.randn((max_rep_degree+1) ** 2, rep_copies)
-x_data = block_wigner_matrix_multiply(angles.float(), x_zero.expand(num_samples, -1, -1), max_rep_degree)
+x_dims = (max_rep_degree + 1) ** 2 * rep_copies
+x_zero = torch.randn((max_rep_degree + 1) ** 2, rep_copies)
+x_data = block_wigner_matrix_multiply(
+    angles.float(), x_zero.expand(num_samples, -1, -1), max_rep_degree
+)
 
 dataset = TensorDataset(x_data, group_data_noised, group_data)
 loader = TensorLoader(dataset, 64, True)
@@ -65,6 +69,7 @@ loader_iter = cycle(loader)
 
 class ConditionalGaussianModel(nn.Module):
     """Models p(G|X) as exp^*(N(mu(x),sigma(X)))"""
+
     def __init__(self):
         super().__init__()
         self.module = MLP(x_dims, 2 * 3, 50, 8)
@@ -72,7 +77,7 @@ class ConditionalGaussianModel(nn.Module):
         # Set intital output at exp^*(N(0,1))
         last_module = list(self.module.modules())[-1]
         last_module.weight.data = torch.zeros_like(last_module.weight)
-        last_module.bias.data = torch.tensor([0., 0., 0., 1., 1., 1.])
+        last_module.bias.data = torch.tensor([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
 
     def distr(self, x):
         out = self.module(x.view(x.shape[0], -1)).double()
@@ -110,7 +115,9 @@ for it in range(50000):
     losses.append(loss.item())
 
     if it % 1000 == 0:
-        print(f"Loss: {np.mean(losses[-1000:]):.4f}. Global minimum: {target_entropy.item():.4f}")
+        print(
+            f"Loss: {np.mean(losses[-1000:]):.4f}. Global minimum: {target_entropy.item():.4f}"
+        )
 
 
 # %%
@@ -122,12 +129,15 @@ viz_data = []
 for _ in range(num_means):
     mean = generation_group_distr.sample((1,))[0]
     x = block_wigner_matrix_multiply(
-        so3_matrix_to_eazyz(mean[None].float()), x_zero[None], max_rep_degree)
+        so3_matrix_to_eazyz(mean[None].float()), x_zero[None], max_rep_degree
+    )
     noise_samples = noise_group_distr.sample((num_noise_samples,))
     samples = (noise_samples @ mean[None]).view(num_noise_samples, 9)
 
     inferred_distr = model.distr(x)
-    inferred_samples = inferred_distr.sample((num_noise_samples,)).view(num_noise_samples, 9)
+    inferred_samples = inferred_distr.sample((num_noise_samples,)).view(
+        num_noise_samples, 9
+    )
     viz_data.append((samples, inferred_samples))
 
 all_data = torch.cat([torch.cat(d) for d in viz_data])
@@ -135,13 +145,13 @@ all_data = torch.cat([torch.cat(d) for d in viz_data])
 pca = PCA(3).fit(all_data)
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
+ax = fig.add_subplot(111, projection="3d")
 
 for i, (samples, inferred_samples) in enumerate(viz_data):
     samples = pca.transform(samples)
     inferred_samples = pca.transform(inferred_samples)
-    ax.scatter(*samples.T, label=f"Original {i}", alpha=.2)
-    ax.scatter(*inferred_samples.T, label=f"Inferred {i}", alpha=.2)
+    ax.scatter(*samples.T, label=f"Original {i}", alpha=0.2)
+    ax.scatter(*inferred_samples.T, label=f"Inferred {i}", alpha=0.2)
 
 plt.legend()
 plt.show()

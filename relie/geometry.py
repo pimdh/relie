@@ -6,11 +6,7 @@ import torch
 
 def cyclic_coordinates(n):
     theta = np.linspace(0, 2 * np.pi, n, endpoint=False)
-    return np.stack([
-        np.cos(theta),
-        np.sin(theta),
-        np.zeros_like(theta)
-    ], 1)
+    return np.stack([np.cos(theta), np.sin(theta), np.zeros_like(theta)], 1)
 
 
 def cyclic_permutations(n):
@@ -34,19 +30,16 @@ def invariant_loss(x, y, symmetry):
     d = x.shape[-1]
     x = x.view(-1, d)  # [b, d]
     y = y.view(-1, d)  # [b, d]
-    x_transformed = torch.einsum('nde,be->nbd', [symmetry, x])
+    x_transformed = torch.einsum("nde,be->nbd", [symmetry, x])
     diff = (y - x_transformed).pow(2).sum(2)  # [n, b]
     min_diff = torch.min(diff, dim=0)[0]  # [b]
     return min_diff.view(batch_shape)
 
 
 def tetrahedron_coordinates():
-    return np.array([
-        [1, 1, 1],
-        [-1, -1, 1],
-        [-1, 1, -1],
-        [1, -1, -1],
-    ], dtype=np.float32)
+    return np.array(
+        [[1, 1, 1], [-1, -1, 1], [-1, 1, -1], [1, -1, -1]], dtype=np.float32
+    )
 
 
 def tetrahedron_permutations():
@@ -89,7 +82,7 @@ def rotation_matrices(coordinates, permutations):
     rs = np.stack(rs)
     # For 2D subspaces, fix
     if (x[:, 2] == 0).all():
-        rs[:, 2, :] = 0.
-        rs[:, :, 2] = 0.
-        rs[:, 2, 2] = 1.
+        rs[:, 2, :] = 0.0
+        rs[:, :, 2] = 0.0
+        rs[:, 2, 2] = 1.0
     return rs

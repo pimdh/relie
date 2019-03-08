@@ -17,9 +17,9 @@ class SO3Prior(Distribution):
 
     def sample(self, shape=torch.Size()):
         n = np.prod(shape)
-        return so3_uniform_random(n, device=self.device, dtype=self.dtype)\
-            .view(*shape, 3, 3)
+        return so3_uniform_random(n, device=self.device, dtype=self.dtype).view(
+            *shape, 3, 3
+        )
 
     def log_prob(self, value):
         return value.new_full(value.shape[:-2], np.log(1 / (8 * np.pi ** 2)))
-

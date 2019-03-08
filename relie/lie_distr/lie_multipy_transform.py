@@ -36,4 +36,3 @@ class LieMultiplyTransform(Transform):
 
 SO3MultiplyTransform = partial(LieMultiplyTransform, inverse_fn=so3_inv)
 SE3MultiplyTransform = partial(LieMultiplyTransform, inverse_fn=se3_inv)
-

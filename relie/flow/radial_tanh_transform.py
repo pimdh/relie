@@ -22,26 +22,22 @@ class RadialTanhTransform(Transform):
 
     def _call(self, x):
         x_norm = x.norm(dim=-1, keepdim=True)
-        mask = x_norm > 1E-8
+        mask = x_norm > 1e-8
         x_norm = torch.where(mask, x_norm, torch.ones_like(x_norm))
 
         return torch.where(
-            mask,
-            torch.tanh(x_norm) * x / x_norm * self.radius,
-            x * self.radius
+            mask, torch.tanh(x_norm) * x / x_norm * self.radius, x * self.radius
         )
 
     def _inverse(self, y):
         org_dtype = y.dtype
         y = y.double()
         y_norm = y.norm(dim=-1, keepdim=True)
-        mask = y_norm > 1E-8
+        mask = y_norm > 1e-8
         y_norm = torch.where(mask, y_norm, torch.ones_like(y_norm))
 
         return torch.where(
-            mask,
-            atanh(y_norm / self.radius) * y / y_norm,
-            y / self.radius
+            mask, atanh(y_norm / self.radius) * y / y_norm, y / self.radius
         ).to(org_dtype)
 
     def log_abs_det_jacobian(self, x, y):
@@ -54,11 +50,7 @@ class RadialTanhTransform(Transform):
         y_norm = y.norm(dim=-1)
         d = y.shape[-1]
         tanh = y_norm / self.radius
-        log_dtanh = torch.log1p(-tanh**2)
+        log_dtanh = torch.log1p(-tanh ** 2)
 
         log_radius = torch.full_like(log_dtanh, math.log(self.radius))
-        return d * torch.where(
-            y_norm > 1E-8,
-            log_dtanh + log_radius,
-            log_radius,
-        )
+        return d * torch.where(y_norm > 1e-8, log_dtanh + log_radius, log_radius)

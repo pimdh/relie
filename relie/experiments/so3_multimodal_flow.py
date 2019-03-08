@@ -13,35 +13,43 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution as LDTD,\
-    PermuteTransform, CouplingTransform, RadialTanhTransform
+from relie.flow import (
+    LocalDiffeoTransformedDistribution as LDTD,
+    PermuteTransform,
+    CouplingTransform,
+    RadialTanhTransform,
+)
 from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_exp
 from relie.utils.modules import MLP, ToTransform, BatchSqueezeModule
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Distribution to create noisy observations: p(G'|G)=n @ G, n \sim exp^*(N(0, .1))
 noise_alg_distr = Normal(
-    torch.zeros(3).double().to(device),
-    torch.full((3, ), .1).double().to(device))
+    torch.zeros(3).double().to(device), torch.full((3,), 0.1).double().to(device)
+)
 noise_group_distr = LDTD(noise_alg_distr, SO3ExpTransform())
 
 # Sample true and noisy group actions
-num_samples = 100000
-noise_samples = noise_group_distr.sample((num_samples, ))
+num_samples = 100_000
+noise_samples = noise_group_distr.sample((num_samples,))
 
 # Make symmetrical
 symmetry_group_size = 3
 symmetry_group = so3_exp(
     torch.tensor(
-        [[2 * np.pi / symmetry_group_size * i, 0, 0]
-         for i in range(symmetry_group_size)],
-        device=device).double())
+        [
+            [2 * np.pi / symmetry_group_size * i, 0, 0]
+            for i in range(symmetry_group_size)
+        ],
+        device=device,
+    ).double()
+)
 
 group_data = symmetry_group.repeat(num_samples // symmetry_group_size, 1, 1)
-group_data_noised = noise_samples[:len(group_data)] @ group_data
+group_data_noised = noise_samples[: len(group_data)] @ group_data
 
 dataset = TensorDataset(group_data_noised)
 loader = TensorLoader(dataset, 640, True)
@@ -55,13 +63,12 @@ class Flow(nn.Module):
         self.d_residue = 1
         self.d_transform = d - self.d_residue
 
-        self.nets = nn.ModuleList([
-            MLP(self.d_residue,
-                2 * self.d_transform,
-                50,
-                3,
-                batch_norm=False) for _ in range(n_layers)
-        ])
+        self.nets = nn.ModuleList(
+            [
+                MLP(self.d_residue, 2 * self.d_transform, 50, 3, batch_norm=False)
+                for _ in range(n_layers)
+            ]
+        )
         self._set_params()
         r = list(range(3))
         self.permutations = [r[i:] + r[:i] for i in range(3)]
@@ -69,11 +76,14 @@ class Flow(nn.Module):
     def forward(self):
         transforms = []
         for i, (net, permutation) in enumerate(
-                zip(self.nets, cycle(self.permutations))):
-            transforms.extend([
-                CouplingTransform(self.d_residue, BatchSqueezeModule(net)),
-                PermuteTransform(permutation),
-            ])
+            zip(self.nets, cycle(self.permutations))
+        ):
+            transforms.extend(
+                [
+                    CouplingTransform(self.d_residue, BatchSqueezeModule(net)),
+                    PermuteTransform(permutation),
+                ]
+            )
         return ComposeTransform(transforms)
 
     def _set_params(self):
@@ -88,18 +98,20 @@ class Flow(nn.Module):
 
 algebra_support_radius = np.pi * 1.1
 
-intermediate_transform = ComposeTransform([
-    RadialTanhTransform(algebra_support_radius),
-    ToTransform(dict(dtype=torch.float32), dict(dtype=torch.float64))
-])
+intermediate_transform = ComposeTransform(
+    [
+        RadialTanhTransform(algebra_support_radius),
+        ToTransform(dict(dtype=torch.float32), dict(dtype=torch.float64)),
+    ]
+)
 
 
 class FlowDistr(nn.Module):
     def __init__(self, flow):
         super().__init__()
         self.flow = flow
-        self.register_buffer('prior_loc', torch.zeros(3))
-        self.register_buffer('prior_scale', torch.ones(3))
+        self.register_buffer("prior_loc", torch.zeros(3))
+        self.register_buffer("prior_scale", torch.ones(3))
 
     def transforms(self):
         transforms = [
@@ -143,14 +155,14 @@ for it in range(num_its):
 model.eval()
 num_noise_samples = 1000
 inferred_distr = model.distr()
-inferred_samples = inferred_distr.sample((num_noise_samples, )).view(-1, 9)
+inferred_samples = inferred_distr.sample((num_noise_samples,)).view(-1, 9)
 truth_samples = next(iter(loader))[0].view(-1, 9)
 pca = PCA(3).fit(inferred_samples)
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(*pca.transform(inferred_samples).T, label="Model samples", alpha=.1)
-ax.scatter(*pca.transform(truth_samples).T, label="Train data", alpha=.1)
+ax = fig.add_subplot(111, projection="3d")
+ax.scatter(*pca.transform(inferred_samples).T, label="Model samples", alpha=0.1)
+ax.scatter(*pca.transform(truth_samples).T, label="Train data", alpha=0.1)
 ax.view_init(70, 30)
 plt.legend()
 plt.show()

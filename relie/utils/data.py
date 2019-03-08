@@ -22,7 +22,7 @@ class TensorLoader:
         return idxs
 
     def __next__(self):
-        batch = self.dataset[self.i:self.i+self.batch_size]
+        batch = self.dataset[self.i : self.i + self.batch_size]
         if len(batch[0]) == 0:
             raise StopIteration()
         self.i += self.batch_size

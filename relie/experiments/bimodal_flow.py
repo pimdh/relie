@@ -11,7 +11,7 @@ from relie.utils.data import TensorLoader, cycle
 
 
 # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
+device = torch.device("cpu")
 
 
 class CouplingFlowModel(nn.Module):
@@ -19,28 +19,31 @@ class CouplingFlowModel(nn.Module):
     Note the reversed() and the .inv, this is because pytorch
     considers the Z -> X transformation, while the literature does the inverse.
     """
+
     def __init__(self, d, d_residue, n_layers):
         super().__init__()
         self.d = d
         self.nets = nn.ModuleList(
-            [nn.Sequential(
-                nn.Linear(d_residue, 50),
-                nn.ReLU(),
-                nn.Linear(50, 50),
-                nn.ReLU(),
-                nn.Linear(50, (d-d_residue) * 2)
-            ) for _ in range(n_layers)]
+            [
+                nn.Sequential(
+                    nn.Linear(d_residue, 50),
+                    nn.ReLU(),
+                    nn.Linear(50, 50),
+                    nn.ReLU(),
+                    nn.Linear(50, (d - d_residue) * 2),
+                )
+                for _ in range(n_layers)
+            ]
         )
-        self.register_buffer('prior_loc', torch.zeros(d))
-        self.register_buffer('prior_scale', torch.ones(d))
+        self.register_buffer("prior_loc", torch.zeros(d))
+        self.register_buffer("prior_scale", torch.ones(d))
 
     def transforms(self):
         transforms = []
         for i, net in enumerate(self.nets):
-            transforms.extend([
-                CouplingTransform(1, net).inv,
-                PermuteTransform([1, 0]).inv
-            ])
+            transforms.extend(
+                [CouplingTransform(1, net).inv, PermuteTransform([1, 0]).inv]
+            )
         return transforms
 
     def distr(self):
@@ -53,8 +56,8 @@ class CouplingFlowModel(nn.Module):
 
 d = 2
 num_samples = 1000
-component_a = torch.randn(num_samples // 2, d) / 5 + torch.tensor([1., 1.])
-component_b = torch.randn(num_samples // 2, d) / 5 + torch.tensor([-1., -1.])
+component_a = torch.randn(num_samples // 2, d) / 5 + torch.tensor([1.0, 1.0])
+component_b = torch.randn(num_samples // 2, d) / 5 + torch.tensor([-1.0, -1.0])
 data = torch.cat([component_a, component_b]).to(device)
 dataset = TensorDataset(data)
 loader = TensorLoader(dataset, 64, True)
@@ -78,6 +81,3 @@ for it in range(100000):
         plt.scatter(*data.t(), s=2)
         plt.scatter(*samples.t(), s=2)
         plt.show()
-
-
-

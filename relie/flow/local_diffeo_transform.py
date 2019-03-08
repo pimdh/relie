@@ -3,6 +3,7 @@ class LocalDiffeoTransform:
     Local diffeomorphism.
     Has discrete set as inverse.
     """
+
     event_dim = 0
 
     def __init__(self, cache_size=1):
@@ -14,7 +15,7 @@ class LocalDiffeoTransform:
             self._cached_x_y = None, None
             self._cached_xset_y = None, None
         else:
-            raise ValueError('cache_size must be 0 or 1')
+            raise ValueError("cache_size must be 0 or 1")
 
     def __eq__(self, other):
         return self is other

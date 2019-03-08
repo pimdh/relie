@@ -1,8 +1,15 @@
 import torch
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from relie.geometry import permutation_matrices, cyclic_permutations, rotation_matrices, cyclic_coordinates, \
-    tetrahedron_coordinates, tetrahedron_permutations, invariant_loss
+from relie.geometry import (
+    permutation_matrices,
+    cyclic_permutations,
+    rotation_matrices,
+    cyclic_coordinates,
+    tetrahedron_coordinates,
+    tetrahedron_permutations,
+    invariant_loss,
+)
 from relie.utils.so3_tools import so3_uniform_random
 
 
@@ -18,8 +25,12 @@ def test_rotations():
 
 def test_invariant_loss():
     x = torch.from_numpy(tetrahedron_coordinates()).float()
-    permutations = torch.from_numpy(permutation_matrices(tetrahedron_permutations())).float()
-    rotations = torch.from_numpy(rotation_matrices(tetrahedron_coordinates(), tetrahedron_permutations())).float()
+    permutations = torch.from_numpy(
+        permutation_matrices(tetrahedron_permutations())
+    ).float()
+    rotations = torch.from_numpy(
+        rotation_matrices(tetrahedron_coordinates(), tetrahedron_permutations())
+    ).float()
     for p in permutations:
         y = p @ x
         l = invariant_loss(x, y, rotations)
@@ -34,7 +45,7 @@ def test_invariant_loss():
     for r in so3_uniform_random(5):
         y = x @ r.t()
         l = invariant_loss(x, y, rotations)
-        assert (l > .01).all()
+        assert (l > 0.01).all()
 
 
 def test_tetrahedron_rotations():

@@ -17,34 +17,36 @@ class LocalDiffeoTransformedDistribution(Distribution):
     def __init__(self, base_distribution, transforms, validate_args=None):
         self.base_dist = base_distribution
         if isinstance(transforms, Transform) or isinstance(
-                transforms, LocalDiffeoTransform):
-            self.transforms = [
-                transforms,
-            ]
+            transforms, LocalDiffeoTransform
+        ):
+            self.transforms = [transforms]
         elif isinstance(transforms, list):
             if not all(
-                    isinstance(t, Transform)
-                    or isinstance(t, LocalDiffeoTransform)
-                    for t in transforms):
+                isinstance(t, Transform) or isinstance(t, LocalDiffeoTransform)
+                for t in transforms
+            ):
                 raise ValueError(
-                    "transforms must be a Transform or a list of Transforms")
+                    "transforms must be a Transform or a list of Transforms"
+                )
             self.transforms = transforms
         else:
             raise ValueError(
-                "transforms must be a Transform or list, but was {}".format(
-                    transforms))
+                "transforms must be a Transform or list, but was {}".format(transforms)
+            )
         # TODO: Accommodate changes in shape
         shape = self.base_dist.batch_shape + self.base_dist.event_shape
-        event_dim = max([len(self.base_dist.event_shape)] +
-                        [t.event_dim for t in self.transforms])
-        batch_shape = shape[:len(shape) - event_dim]
-        event_shape = shape[len(shape) - event_dim:]
+        event_dim = max(
+            [len(self.base_dist.event_shape)] + [t.event_dim for t in self.transforms]
+        )
+        batch_shape = shape[: len(shape) - event_dim]
+        event_shape = shape[len(shape) - event_dim :]
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property
     def support(self):
-        return self.transforms[-1].codomain \
-            if self.transforms else self.base_dist.support
+        return (
+            self.transforms[-1].codomain if self.transforms else self.base_dist.support
+        )
 
     @property
     def has_rsample(self):
@@ -86,11 +88,11 @@ class LocalDiffeoTransformedDistribution(Distribution):
         # TODO: fix dtypes
         event_dim = len(self.event_shape)
         assert torch.isnan(y).sum() == 0
-        assert (y.abs() == float('inf')).any() == 0
+        assert (y.abs() == float("inf")).any() == 0
         if not transforms:
             log_prob = _sum_rightmost(
-                self.base_dist.log_prob(y),
-                event_dim - len(self.base_dist.event_shape)).float()
+                self.base_dist.log_prob(y), event_dim - len(self.base_dist.event_shape)
+            ).float()
             assert torch.isnan(log_prob).sum() == 0
             return log_prob
 
@@ -99,8 +101,8 @@ class LocalDiffeoTransformedDistribution(Distribution):
         if isinstance(transform, Transform):
             x = transform.inv(y)
             log_prob = -_sum_rightmost(
-                transform.log_abs_det_jacobian(x, y),
-                event_dim - transform.event_dim)
+                transform.log_abs_det_jacobian(x, y), event_dim - transform.event_dim
+            )
             next_log_prob = self._log_prob(x, transforms)
             assert torch.isnan(log_prob).sum() == 0
             assert torch.isnan(next_log_prob).sum() == 0
@@ -112,20 +114,21 @@ class LocalDiffeoTransformedDistribution(Distribution):
 
             # First propate back x to use caching
             x_log_prob = -_sum_rightmost(
-                transform.log_abs_det_jacobian(x, y),
-                event_dim - transform.event_dim)
+                transform.log_abs_det_jacobian(x, y), event_dim - transform.event_dim
+            )
             x_next_log_prob = self._log_prob(x, transforms)
             x_term = x_log_prob.float() + x_next_log_prob.float()
 
             # Now propagate others
             xset_log_prob = -_sum_rightmost(
-                transform.log_abs_det_jacobian(xset, y),
-                event_dim - transform.event_dim)
+                transform.log_abs_det_jacobian(xset, y), event_dim - transform.event_dim
+            )
             xset_next_log_prob = self._log_prob(xset, transforms)
             xset_terms = torch.where(
                 mask,
                 xset_log_prob.float() + xset_next_log_prob.float(),
-                torch.tensor([float('-inf')], device=xset_log_prob.device))
+                torch.tensor([float("-inf")], device=xset_log_prob.device),
+            )
 
             terms = torch.cat([x_term[None], xset_terms])
             assert torch.isnan(terms).sum() == 0

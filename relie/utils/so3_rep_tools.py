@@ -7,13 +7,12 @@ import torch
 def _z_rot_mat(angle, l):
     m = angle.new_zeros((angle.size(0), 2 * l + 1, 2 * l + 1))
 
-    inds = torch.arange(
-        0, 2 * l + 1, 1, dtype=torch.long, device=angle.device)
-    reversed_inds = torch.arange(
-        2 * l, -1, -1, dtype=torch.long, device=angle.device)
+    inds = torch.arange(0, 2 * l + 1, 1, dtype=torch.long, device=angle.device)
+    reversed_inds = torch.arange(2 * l, -1, -1, dtype=torch.long, device=angle.device)
 
-    frequencies = torch.arange(
-        l, -l - 1, -1, dtype=angle.dtype, device=angle.device)[None]
+    frequencies = torch.arange(l, -l - 1, -1, dtype=angle.dtype, device=angle.device)[
+        None
+    ]
 
     m[:, inds, reversed_inds] = torch.sin(frequencies * angle[:, None])
     m[:, inds, inds] = torch.cos(frequencies * angle[:, None])
@@ -28,11 +27,13 @@ class JContainer:
         if str(device) in cls.data:
             return cls.data[str(device)]
 
-        from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense \
-            import Jd as Jd_np
+        from lie_learn.representations.SO3.pinchon_hoggan.pinchon_hoggan_dense import (
+            Jd as Jd_np,
+        )
 
-        device_data = [torch.tensor(J, dtype=torch.float32, device=device)
-                       for J in Jd_np]
+        device_data = [
+            torch.tensor(J, dtype=torch.float32, device=device) for J in Jd_np
+        ]
         cls.data[str(device)] = device_data
 
         return device_data
@@ -66,9 +67,9 @@ def block_wigner_matrix_multiply(angles, data, max_degree):
     """
     outputs = []
     start = 0
-    for degree in range(max_degree+1):
+    for degree in range(max_degree + 1):
         dim = 2 * degree + 1
         matrix = wigner_d_matrix(angles, degree)
-        outputs.append(matrix.bmm(data[:, start:start+dim, :]))
+        outputs.append(matrix.bmm(data[:, start : start + dim, :]))
         start += dim
     return torch.cat(outputs, 1)

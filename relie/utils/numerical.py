@@ -10,21 +10,20 @@ def batch_trace(m):
 
 
 def sample_ball(n, d, device=None, dtype=None):
-    u = torch.rand(n, device=device, dtype=dtype) ** (1/d)
+    u = torch.rand(n, device=device, dtype=dtype) ** (1 / d)
     x = torch.randn(n, d, device=device, dtype=dtype)
     return x / x.norm(dim=1, keepdim=True) * u[:, None]
 
 
 def zero_one_outer_product(n, dtype=None, device=None):
-    return torch.tensor(
-        list(product([0, 1], repeat=n)), dtype=dtype, device=device)
+    return torch.tensor(list(product([0, 1], repeat=n)), dtype=dtype, device=device)
 
 
 class AtanhFunction(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x):
         ctx.save_for_backward(x)
-        return .5 * (torch.log1p(x) - torch.log1p(-x))
+        return 0.5 * (torch.log1p(x) - torch.log1p(-x))
 
     @staticmethod
     def backward(ctx, grad_output):

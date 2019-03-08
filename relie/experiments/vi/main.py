@@ -29,8 +29,12 @@ from relie.experiments.vi.flow_distribution import Flow, FlowDistribution
 from relie.experiments.vi.pushed_gaussian_distribution import PushedGaussianDistribution
 from relie.lie_distr import SO3Prior
 from relie.utils.so3_tools import so3_log, so3_vee
-from relie.geometry import cyclic_coordinates, invariant_loss, \
-    cyclic_permutations, rotation_matrices
+from relie.geometry import (
+    cyclic_coordinates,
+    invariant_loss,
+    cyclic_permutations,
+    rotation_matrices,
+)
 
 from relie.utils.metropolis_hastings import so3_mh
 
@@ -42,8 +46,8 @@ torch.manual_seed(0)
 
 # Two points
 x_zero = torch.tensor(cyclic_coordinates(2)).double()
-symmetry = np.eye(3)[None,...]
-#symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
+symmetry = np.eye(3)[None, ...]
+# symmetry = rotation_matrices(cyclic_coordinates(2), cyclic_permutations(2))
 
 # Equilateral triangle
 x_zero = torch.tensor(cyclic_coordinates(3)).double()
@@ -79,7 +83,7 @@ def prediction_loss_fn(g, x, x_zero):
     :return: (b)
     """
     sym = torch.eye(3)[None].double() if symmetry is None else symmetry
-    y = torch.einsum('bij,nj->bni', [g, x_zero])  # [b, n, 3]
+    y = torch.einsum("bij,nj->bni", [g, x_zero])  # [b, n, 3]
     x = x.expand_as(y)
     l = invariant_loss(x.contiguous(), y.contiguous(), sym)
     return l.mean(1)
@@ -89,7 +93,7 @@ class VIModel(nn.Module):
     def __init__(self, distr):
         super().__init__()
         self.distr = distr
-        self.beta = 1E-1
+        self.beta = 1e-1
 
     def forward(self, x, x_zero):
         distr = self.distr()
@@ -98,32 +102,38 @@ class VIModel(nn.Module):
         prediction_loss = prediction_loss_fn(g, x, x_zero).float()
         entropy = -distr.log_prob(g)
         loss = prediction_loss - entropy * self.beta
-        return loss, {
-            'loss': loss.mean().item(),
-            'prediction': prediction_loss.mean().item(),
-            'entropy': entropy.mean().item(),
-        }
+        return (
+            loss,
+            {
+                "loss": loss.mean().item(),
+                "prediction": prediction_loss.mean().item(),
+                "entropy": entropy.mean().item(),
+            },
+        )
 
 
-def plot_group_samples(model, true_post = None):
+def plot_group_samples(model, true_post=None):
     model.eval()
     num_noise_samples = 1000
-    true_post_ = true_post.view(-1,9)
+    true_post_ = true_post.view(-1, 9)
     inferred_distr = model.distr()
-    inferred_samples = inferred_distr.sample((num_noise_samples, )).view(-1, 9)
+    inferred_samples = inferred_distr.sample((num_noise_samples,)).view(-1, 9)
 
     if true_post is not None:
-        samples = torch.cat([inferred_samples, true_post_],0)
+        samples = torch.cat([inferred_samples, true_post_], 0)
     else:
         samples = inferred_samples
 
     pca = PCA(3).fit(samples)
 
-
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(*pca.transform(inferred_samples).T, label="Model samples", alpha=.1, color="r")
-    ax.scatter(*pca.transform(true_post_).T, label="Model samples", alpha=.1, color="b")
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(
+        *pca.transform(inferred_samples).T, label="Model samples", alpha=0.1, color="r"
+    )
+    ax.scatter(
+        *pca.transform(true_post_).T, label="Model samples", alpha=0.1, color="b"
+    )
     ax.view_init(70, 30)
     # plt.legend()
     plt.tight_layout()
@@ -136,8 +146,8 @@ def plot_samples(samples):
     pca = PCA(3).fit(samples_)
 
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(*pca.transform(samples_).T, label="Model samples", alpha=.1)
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(*pca.transform(samples_).T, label="Model samples", alpha=0.1)
     ax.view_init(70, 30)
     # proj_samples = pca.transform(samples_)
     # print(proj_samples.shape)
@@ -150,18 +160,17 @@ def plot_samples(samples):
 
 # running MH
 def log_energy(g):
-    return -  2 * prediction_loss_fn(g, x, x_zero)
+    return -2 * prediction_loss_fn(g, x, x_zero)
+
 
 true_post = so3_mh(log_energy, 1000, 1000)[-1]
 
 plot_samples(true_post)
 
-mask = log_energy(true_post) > - 0.5
+mask = log_energy(true_post) > -0.5
 
 plot_samples(true_post[mask])
-#print(log_energy(true_post[mask]))
-
-
+# print(log_energy(true_post[mask]))
 
 
 flow = Flow(3, 12, batch_norm=False)
@@ -169,7 +178,7 @@ flow_distr = FlowDistribution(flow, math.pi * 1.0)
 gaussian_distr = PushedGaussianDistribution(lie_multiply=True)
 # model = VIModel(gaussian_distr)
 model = VIModel(flow_distr)
-optimizer = torch.optim.Adam(model.parameters(), lr=1E-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 infos = []
 for it in range(50000):
@@ -188,6 +197,7 @@ for it in range(50000):
         print_log_summary(it, 1000, infos)
         plot_group_samples(model, true_post)
         if model.distr is gaussian_distr:
-            print(f"Parameters: {torch.cat([gaussian_distr.loc, gaussian_distr.scale]).tolist()}")
+            print(
+                f"Parameters: {torch.cat([gaussian_distr.loc, gaussian_distr.scale]).tolist()}"
+            )
             print(f"Target at {g_zero_alg.tolist()}")
-

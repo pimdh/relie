@@ -32,8 +32,7 @@ class BatchNormTransform(Transform):
         mu = self.module.running_mean.detach()
         var = self.module.running_var.detach()
         sigma = torch.sqrt(var + self.module.eps)
-        x = ((y - self.module.bias) / self.module.weight
-             * sigma + mu)
+        x = (y - self.module.bias) / self.module.weight * sigma + mu
         x = x.view(*batch_shape, y.shape[-1])
         self._cache_stats = x, mu, var
         return x

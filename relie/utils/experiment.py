@@ -14,7 +14,7 @@ from tensorboardX import SummaryWriter
 from subprocess import check_output
 from collections import OrderedDict
 
-if not environ.get('DISPLAY', ''):
+if not environ.get("DISPLAY", ""):
     matplotlib.use("Agg")
 
 
@@ -35,10 +35,10 @@ def setup_logging(path):
 
 
 def setup_experiment(experiment_name, run_name, args):
-    if 'RESULTS_PATH' in environ:
-        out_dir = environ['RESULTS_PATH']
+    if "RESULTS_PATH" in environ:
+        out_dir = environ["RESULTS_PATH"]
     else:
-        out_dir = './outputs'
+        out_dir = "./outputs"
 
     t = str(int(datetime.utcnow().timestamp())) + secrets.token_hex(2)
     identifier = f"{run_name}-{t}" if run_name else t
@@ -52,31 +52,29 @@ def setup_experiment(experiment_name, run_name, args):
             return os.path.join(path, filename)
         return path
 
-    setup_logging(out_path(filename='out.log'))
+    setup_logging(out_path(filename="out.log"))
 
-    commit = check_output(['git', 'describe', '--always', '--dirty'])\
-        .decode('utf-8').strip()
+    commit = (
+        check_output(["git", "describe", "--always", "--dirty"]).decode("utf-8").strip()
+    )
 
-    if 'dirty' in commit and run_name is not None:
+    if "dirty" in commit and run_name is not None:
         raise RuntimeError("Try to run in dirty commit with run name")
 
     if not isinstance(args, dict):
         args = vars(args)
-    data = {
-        **args, 'identifier': identifier,
-        'source_commit': commit
-    }
+    data = {**args, "identifier": identifier, "source_commit": commit}
     logging.info(pformat(data))
-    with open(out_path(filename='config.json'), 'w') as f:
+    with open(out_path(filename="config.json"), "w") as f:
         json.dump(data, f, indent=2)
 
-    tb_writer = SummaryWriter(out_path(category='tb'))
+    tb_writer = SummaryWriter(out_path(category="tb"))
 
     return tb_writer, out_path
 
 
 def tensor_read_image(path):
-    img = Image.open(path).convert('RGB')
+    img = Image.open(path).convert("RGB")
     t = torch.tensor(np.array(img)).permute([2, 0, 1]).float() / 255
     return t
 
@@ -95,4 +93,3 @@ def print_log_summary(it, report_freq, results):
     entries = ["{}={:.4f}".format(k, values.mean()) for k, values in res.items()]
     out = "{}: {}".format(it, " ".join(entries))
     print(out)
-

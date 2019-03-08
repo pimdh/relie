@@ -16,12 +16,12 @@ def test_atanh():
     x_recon = atanh(y)
     assert_array_almost_equal(x_recon, x)
 
-    y = torch.rand(1000, dtype=torch.double) * (2 - 1E-5) - 1
+    y = torch.rand(1000, dtype=torch.double) * (2 - 1e-5) - 1
     x = atanh(y)
     y_recon = torch.tanh(x)
     assert_array_almost_equal(y, y_recon)
 
 
 def test_atanh_grad():
-    y = torch.rand(10000, requires_grad=True, dtype=torch.double) * (2-1E-3) - 1
+    y = torch.rand(10000, requires_grad=True, dtype=torch.double) * (2 - 1e-3) - 1
     assert torch.autograd.gradcheck(atanh, (y,), eps=1e-6, atol=1e-4)

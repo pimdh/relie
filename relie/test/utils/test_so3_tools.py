@@ -21,7 +21,7 @@ def test_log_not_nan():
 
 
 def test_diffeo_region():
-    x = sample_ball(1000000, 3, dtype=torch.double) * (1 * np.pi - 1E-6)
+    x = sample_ball(1000000, 3, dtype=torch.double) * (1 * np.pi - 1e-6)
     r = so3_exp(x)
     x_recon = so3_vee(so3_log(r))
     assert_array_almost_equal(x_recon, x)
@@ -34,8 +34,9 @@ def assert_reconstruction(x, x_recon):
     x_recon_norm = x_recon.norm(dim=1, keepdim=True)
     x_recon_normed = x_recon / x_recon_norm
     diff = torch.min(
-        (x_normed-x_recon_normed).pow(2).sum(1),
-        (x_normed+x_recon_normed).pow(2).sum(1))
+        (x_normed - x_recon_normed).pow(2).sum(1),
+        (x_normed + x_recon_normed).pow(2).sum(1),
+    )
     assert_array_almost_equal(diff, torch.zeros_like(diff))
 
     # Test xset
@@ -66,8 +67,8 @@ def test_regular_region():
 def test_so3_log_pi():
     """Test so3_log_pi in particular."""
     x = torch.randn(1, 3, dtype=torch.double)
-    x = x / x.norm(dim=1, keepdim=True) * .2
-    theta = torch.tensor([.2], dtype=torch.double)[:, None, None]
+    x = x / x.norm(dim=1, keepdim=True) * 0.2
+    theta = torch.tensor([0.2], dtype=torch.double)[:, None, None]
     r = so3_exp(x)
     x_recon = so3_vee(so3_log_pi(r, theta))
     assert_array_almost_equal(x, x_recon, 4)

@@ -21,7 +21,6 @@ def test_batch_norm_transform_eval():
         assert_array_almost_equal(x.detach(), x_recon.detach())
 
 
-
 def test_batch_norm_transform_train():
     d = 7
     batch_size = 10000

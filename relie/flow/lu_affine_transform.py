@@ -28,9 +28,10 @@ class LUAffineTransform(Transform):
         assert lower.shape == (d, d)
         assert upper.shape == (d, d)
         assert diag.shape == (d,)
-        assert bias.shape == (d, )
+        assert bias.shape == (d,)
         self.lower = lower.tril(-1) + torch.eye(
-            d, dtype=lower.dtype, device=lower.device)
+            d, dtype=lower.dtype, device=lower.device
+        )
         self.upper = upper.triu(1)
         self.diag = diag
         self.bias = bias
@@ -59,11 +60,11 @@ class LUAffineTransform(Transform):
 
 def lu_affine_transform_parameters(d):
     # stdv = 1. / math.sqrt(d) / 100
-    stdv = 0.
+    stdv = 0.0
     tensors = {
-        'lower': torch.Tensor(d, d).uniform_(-stdv, stdv),
-        'upper': torch.Tensor(d, d).uniform_(-stdv, stdv),
-        'diag': torch.Tensor(d).uniform_(-stdv, stdv) + 1,
-        'bias': torch.Tensor(d).uniform_(-stdv, stdv),
+        "lower": torch.Tensor(d, d).uniform_(-stdv, stdv),
+        "upper": torch.Tensor(d, d).uniform_(-stdv, stdv),
+        "diag": torch.Tensor(d).uniform_(-stdv, stdv) + 1,
+        "bias": torch.Tensor(d).uniform_(-stdv, stdv),
     }
     return nn.ParameterDict({k: nn.Parameter(t) for k, t in tensors.items()})

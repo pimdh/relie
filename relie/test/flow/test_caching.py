@@ -20,11 +20,10 @@ def test_caching():
     transforms = [
         t,
         ToTransform(dict(dtype=torch.float32), dict(dtype=torch.float64)),
-        SO3ExpTransform(2)
+        SO3ExpTransform(2),
     ]
 
     distr = LDTD(prior, transforms)
     t._inverse = mock_inverse
     g = distr.rsample((64,))
     distr.log_prob(g)
-

@@ -55,9 +55,9 @@ class CouplingTransform(Transform):
 
     def partition(self, x):
         d = x.shape[-1]
-        return x[..., :d-self.d_residue], x[..., d-self.d_residue:]
+        return x[..., : d - self.d_residue], x[..., d - self.d_residue :]
 
     def f_split(self, x):
         out = self._f(x)
-        d = out.shape[-1]//2
+        d = out.shape[-1] // 2
         return out[..., :d], out[..., d:]

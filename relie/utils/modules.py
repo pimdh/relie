@@ -5,13 +5,21 @@ from torch.distributions import Transform
 
 class MLP(nn.Module):
     """Helper module to create MLPs."""
-    def __init__(self, input_dims, output_dims, hidden_dims,
-                 num_layers=1, activation=nn.ReLU, batch_norm=False):
+
+    def __init__(
+        self,
+        input_dims,
+        output_dims,
+        hidden_dims,
+        num_layers=1,
+        activation=nn.ReLU,
+        batch_norm=False,
+    ):
         super().__init__()
         if num_layers == 0:
             self.module = nn.Linear(input_dims, output_dims)
         else:
-            dims = [input_dims, *[hidden_dims]*num_layers, output_dims]
+            dims = [input_dims, *[hidden_dims] * num_layers, output_dims]
             modules = []
             for l, (d_in, d_out) in enumerate(zip(dims[:-1], dims[1:])):
                 modules.append(nn.Linear(d_in, d_out))
@@ -36,13 +44,14 @@ class ConditionalModule(nn.Module):
     Note:
         x and y must have same -2'th dimension (usually batch)
     """
+
     def __init__(self, submodule, x):
         super().__init__()
         self.x = x
         self.submodule = submodule
 
     def forward(self, y):
-        x = self.x.expand(*y.shape[:y.dim() - 2], -1, -1)
+        x = self.x.expand(*y.shape[: y.dim() - 2], -1, -1)
         z = torch.cat([x, y], -1)
         batch_shape = z.shape[:-1]
         z = z.view(-1, z.shape[-1])
@@ -54,14 +63,15 @@ class BatchSqueezeModule(nn.Module):
     """
     Module that reshapes batch dim to single dimension, calls submodule and reshapes.
     """
+
     def __init__(self, submodule, feature_dims=1):
         super().__init__()
         self.submodule = submodule
         self.feature_dims = feature_dims
 
     def forward(self, x):
-        batch_shape = x.shape[:-self.feature_dims]
-        x = x.view(-1, *x.shape[-self.feature_dims:])
+        batch_shape = x.shape[: -self.feature_dims]
+        x = x.view(-1, *x.shape[-self.feature_dims :])
         y = self.submodule(x)
         return y.view(*batch_shape, *y.shape[1:])
 
@@ -70,6 +80,7 @@ class ToTransform(Transform):
     """
     Transform dtype or device.
     """
+
     event_dim = 0
     sign = 1
 

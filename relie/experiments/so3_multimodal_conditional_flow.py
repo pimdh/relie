@@ -28,14 +28,13 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
+from relie import LocalDiffeoTransformedDistribution as LDTD, SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
 from relie.flow import (
-    LocalDiffeoTransformedDistribution as LDTD,
     PermuteTransform,
     CouplingTransform,
     RadialTanhTransform,
     BatchNormTransform,
 )
-from relie.lie_distr import SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz, so3_exp
 from relie.utils.so3_rep_tools import block_wigner_matrix_multiply

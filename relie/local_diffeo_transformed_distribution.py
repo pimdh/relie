@@ -4,7 +4,7 @@ from torch.distributions.distribution import Distribution
 from torch.distributions.transforms import Transform
 from torch.distributions.utils import _sum_rightmost
 
-from relie.flow import LocalDiffeoTransform
+from relie import LocalDiffeoTransform
 
 
 class LocalDiffeoTransformedDistribution(Distribution):

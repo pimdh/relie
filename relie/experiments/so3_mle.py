@@ -6,8 +6,7 @@ import torch.nn as nn
 from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
-from relie.flow import LocalDiffeoTransformedDistribution
-from relie.lie_distr import SO3ExpTransform
+from relie import LocalDiffeoTransformedDistribution, SO3ExpTransform
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_exp
 

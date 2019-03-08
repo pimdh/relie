@@ -2,7 +2,7 @@ import math
 import torch
 from torch.distributions import constraints, Transform
 
-from relie.flow import LocalDiffeoTransform
+from relie import LocalDiffeoTransform
 from relie.utils.so3_tools import (
     so3_exp,
     so3_log,

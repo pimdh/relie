@@ -29,7 +29,7 @@ from relie.experiments.vi.flow_distribution import Flow, FlowDistribution
 from relie.experiments.vi.pushed_gaussian_distribution import PushedGaussianDistribution
 from relie.lie_distr import SO3Prior
 from relie.utils.so3_tools import so3_log, so3_vee
-from relie.geometry import (
+from relie.utils.geometry import (
     cyclic_coordinates,
     invariant_loss,
     cyclic_permutations,

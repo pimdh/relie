@@ -79,7 +79,7 @@ def mh_step(x, log_energy, kernel_gen):
     return x
 
 
-def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin=0):
+def mh(log_energy, length, n_chains, kernel_gen, prior, burnin=0):
 
     """
     Given log_energ, a transition kernel genrator and a prior i runs the metropolis hastings algorithm
@@ -87,7 +87,7 @@ def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin=0):
       
     log_energy : function that given a batch (batch_dims, distr_dims) of points 
                     returns a tensor of shape (batch_dims) ofthe log_energy of each point                
-    lenght: lenght of each markov chain   
+    length: length of each markov chain
     n_chains: number of parallel markov chains that needto be run 
     
                     
@@ -95,12 +95,12 @@ def mh(log_energy, lenght, n_chains, kernel_gen, prior, burnin=0):
                 in form of a torch.distribution
     prior: prior distribution from which the initial samples are drawn 
     burnin: number of discarded samples at the beginning of each markov chain
-    returns: a tensor of shape (lenght - burnin, n_chains , distr_dims) of samples
+    returns: a tensor of shape (length - burnin, n_chains , distr_dims) of samples
     """
     s = torch.Size((n_chains,))
     x = prior.sample(s).squeeze(0)
     l = [x.double()]
-    for i in range(lenght - 1):
+    for i in range(length - 1):
         x = mh_step(x, log_energy, kernel_gen)
         l.append(x.clone())
     return torch.stack(l[burnin:], 0)

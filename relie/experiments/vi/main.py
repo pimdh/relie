@@ -19,7 +19,6 @@ Loss is symmetry invariant loss function.
 """
 import math
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 import numpy as np
 import torch
@@ -29,13 +28,11 @@ from relie.utils.experiment import print_log_summary
 from relie.experiments.vi.flow_distribution import Flow, FlowDistribution
 from relie.experiments.vi.pushed_gaussian_distribution import PushedGaussianDistribution
 from relie.lie_distr import SO3Prior
-from relie.utils.so3_tools import so3_log, so3_vee, so3_matrix_to_eazyz
-from relie.utils.so3_rep_tools import block_wigner_matrix_multiply
+from relie.utils.so3_tools import so3_log, so3_vee
 from relie.geometry import cyclic_coordinates, invariant_loss, \
-    cyclic_permutations, rotation_matrices, tetrahedron_coordinates, \
-    tetrahedron_permutations
+    cyclic_permutations, rotation_matrices
 
-from point_exp.metropolis_hastings import so3_mh
+from relie.utils.metropolis_hastings import so3_mh
 
 torch.manual_seed(0)
 

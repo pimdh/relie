@@ -1,11 +1,11 @@
 # relie
-Experiments for the AISTATS publication on Reparameterizing Distributions over Lie Groups [1].
+Experiments for the AISTATS publication on Reparameterizing Distributions over Lie Groups [1] ([arxiv](https://arxiv.org/abs/1903.02958)).
 
 
 ## Implementation
 We implement the code for SO(3) in PyTorch by building on the `torch.distributions.transform` framework. We extend this framework, as the Lie group exponential map is not a bijection, but a locally invertible function / a local diffeomorphism. `relie.LocalDiffeoTransform` generalizes `torch.distributions.transform.Transform`  and `relie.LocalDiffeoTransformedDistribution` generalizes `torch.distributions.transform.TransformedDistribution`. 
 
-The simplest way of creating a distribution on the group, is my putting a zero-mean Gaussian on the algebra, pushing this forward and left-multiplying with a group element, to put the 'mean' of the resulting distribution away from the identity. This can be constructed as follows:
+The simplest way of creating a distribution on the group, is by putting a zero-mean Gaussian on the algebra, pushing this forward and left-multiplying with a group element, to put the 'mean' of the resulting distribution away from the identity. This can be constructed as follows:
 ```
 from relie import (
     SO3ExpTransform,

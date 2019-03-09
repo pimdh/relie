@@ -1,7 +1,7 @@
 class LocalDiffeoTransform:
     """
-    Local diffeomorphism.
-    Has discrete set as inverse.
+    This is a generalization of torch.distributions.transforms.Transform,
+    where the transform is a local diffeomorphism and thus has a discrete set as inverse.
     """
 
     event_dim = 0
@@ -36,8 +36,11 @@ class LocalDiffeoTransform:
     def inverse_set(self, y):
         """
         Return preimage: `y => {x: f(x) = y}`.
-        y : batch_shape + event_shape
-        Returns: (size_xset,) + batch_shape + event_shape
+        :param y: batch_shape + event_shape
+        :return: (x, xset, mask)
+        x : The "primary" inverse of shape of y
+        xset : {x' | x'=f(x) && x' != x} of shape (?, *x.shape)
+        mask : boolean tensor of shape of xset potentially making elements of xset be ignored
         """
         if self._cache_size == 0:
             return self._inverse_set(y)
@@ -68,15 +71,23 @@ class LocalDiffeoTransform:
 
     def _inverse_set(self, y):
         """
-        Abstract method to compute inverse set.
-        y : batch_shape + event_shape
-        Returns: (n,) + batch_shape + event_shape
+        Abstract method to compute inverse set {x : f(x)=y}.
+        :param y: Tensor
+        :return: (x, xset, mask)
+        x : The "primary" inverse of shape of y
+        xset : {x' | x'=f(x) && x' != x} of shape (?, *x.shape)
+        mask : boolean tensor of shape of xset potentially making elements of xset be ignored
         """
         raise NotImplementedError
 
     def _xset(self, x):
         """
         Return preimage of f(x), optional.
+        :param x:
+        :return: (x, xset, mask)
+        x : the input
+        xset : {x' | x'=f(x) && x' != x} of shape (?, *x.shape)
+        mask : boolean tensor of shape of xset potentially making elements of xset be ignored
         """
         return None
 

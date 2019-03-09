@@ -11,7 +11,11 @@ from relie.flow import (
     PermuteTransform,
     RadialTanhTransform,
 )
-from relie import SO3ExpCompactTransform, SO3ExpBijectiveTransform, LocalDiffeoTransformedDistribution as LDTD
+from relie import (
+    SO3ExpCompactTransform,
+    SO3ExpBijectiveTransform,
+    LocalDiffeoTransformedDistribution as LDTD,
+)
 from relie.utils.modules import MLP, BatchSqueezeModule, ToTransform
 
 

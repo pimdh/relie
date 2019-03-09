@@ -3,7 +3,11 @@ from torch import nn as nn
 from torch.distributions import Normal
 from torch.nn import functional as F
 
-from relie import SO3ExpTransform, SO3MultiplyTransform, LocalDiffeoTransformedDistribution as LDTD
+from relie import (
+    SO3ExpTransform,
+    SO3MultiplyTransform,
+    LocalDiffeoTransformedDistribution as LDTD,
+)
 from relie.utils.so3_tools import so3_exp
 
 

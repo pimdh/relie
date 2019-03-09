@@ -23,7 +23,12 @@ import torch.nn.functional as F
 from torch.distributions import Normal
 from torch.utils.data import TensorDataset
 
-from relie import LocalDiffeoTransformedDistribution as LDTD, SO3ExpTransform, SO3Prior, SO3ExpCompactTransform
+from relie import (
+    LocalDiffeoTransformedDistribution as LDTD,
+    SO3ExpTransform,
+    SO3Prior,
+    SO3ExpCompactTransform,
+)
 from relie.flow import RadialTanhTransform
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_matrix_to_eazyz

@@ -13,12 +13,12 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie.flow import (
-    PermuteTransform,
-    CouplingTransform,
-    RadialTanhTransform,
+from relie.flow import PermuteTransform, CouplingTransform, RadialTanhTransform
+from relie import (
+    SO3ExpTransform,
+    SO3ExpCompactTransform,
+    LocalDiffeoTransformedDistribution as LDTD,
 )
-from relie import SO3ExpTransform, SO3ExpCompactTransform, LocalDiffeoTransformedDistribution as LDTD
 from relie.utils.data import TensorLoader, cycle
 from relie.utils.so3_tools import so3_exp
 from relie.utils.modules import MLP, ToTransform, BatchSqueezeModule

@@ -28,7 +28,12 @@ import torch.nn as nn
 from torch.distributions import Normal, ComposeTransform
 from torch.utils.data import TensorDataset
 
-from relie import LocalDiffeoTransformedDistribution as LDTD, SO3ExpTransform, SO3ExpCompactTransform, SO3Prior
+from relie import (
+    LocalDiffeoTransformedDistribution as LDTD,
+    SO3ExpTransform,
+    SO3ExpCompactTransform,
+    SO3Prior,
+)
 from relie.flow import (
     PermuteTransform,
     CouplingTransform,

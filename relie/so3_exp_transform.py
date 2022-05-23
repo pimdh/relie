@@ -33,7 +33,7 @@ class SO3ExpTransform(LocalDiffeoTransform):
 
     def _xset(self, x):
         xset = so3_xset(x, self.k_max)
-        mask = torch.full(xset.shape[:-1], True, dtype=torch.uint8)
+        mask = torch.full(xset.shape[:-1], True, dtype=torch.bool)
         return x, xset, mask
 
     def log_abs_det_jacobian(self, x, y):

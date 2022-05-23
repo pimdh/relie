@@ -6,7 +6,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         'torch',
-        'pytorch3d',
         'numpy',
         'Pillow',
         'tensorboardX',

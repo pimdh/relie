@@ -140,7 +140,8 @@ def so3_xset(x, k_max):
     shape = [-1, *[1] * (x.dim() - 1)]
     k_range = torch.arange(1, k_max + 1, dtype=x.dtype, device=x.device)
     k_range = torch.cat([-k_range, k_range]).view(shape)
-    return x / x_norm * (x_norm + 2 * math.pi * k_range)
+    xset_norm = torch.nan_to_num(x / x_norm)
+    return xset_norm * (x_norm + 2 * math.pi * k_range)
 
 
 def so3_log_abs_det_jacobian(x):

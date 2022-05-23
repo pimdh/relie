@@ -10,4 +10,10 @@ from .so3_exp_transform import (
     SO3ExpCompactTransform,
     SO3ExpBijectiveTransform,
 )
+
+from .se3_exp_transform import (
+    SE3ExpTransform,
+    SE3ExpCompactTransform,
+    SE3ExpBijectiveTransform,
+)
 from .so3_prior import SO3Prior

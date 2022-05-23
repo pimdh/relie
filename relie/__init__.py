@@ -1,5 +1,5 @@
 from relie.local_diffeo_transform import LocalDiffeoTransform
-from relie..local_diffeo_transformed_distribution import LocalDiffeoTransformedDistribution
+from relie.local_diffeo_transformed_distribution import LocalDiffeoTransformedDistribution
 from relie.lie_multipy_transform import (
     LieMultiplyTransform,
     SO3MultiplyTransform,

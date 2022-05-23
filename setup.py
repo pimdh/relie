@@ -7,7 +7,7 @@ setup(
     install_requires=[
         'torch',
         'pytorch3d',
-        'numpy'
+        'numpy',
         'Pillow',
         'tensorboardX',
         'scikit-learn',

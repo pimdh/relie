@@ -112,7 +112,7 @@ def se3_inv(x):
 
     return se3_fill(so3_inv, r3_inv.squeeze(-1))
 
-
+# TODO: take into account translations
 def se3_xset(x, k_max):
     v_so3, v_r = x.split([3, 3], dim=-1)
     v_r = torch.tile(v_r.unsqueeze(0), (2*k_max, 1, 1))

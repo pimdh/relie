@@ -1,15 +1,9 @@
 import math
-import torch
-from torch.distributions import constraints, Transform
 
+import torch
 from relie import LocalDiffeoTransform
-from relie.utils.se3_tools import (
-    se3_exp,
-    se3_log,
-    se3_vee,
-    se3_xset,
-    se3_log_abs_det_jacobian,
-)
+from relie.utils.se3_tools import se3_exp, se3_log, se3_log_abs_det_jacobian, se3_xset
+from torch.distributions import Transform, constraints
 
 
 class SE3ExpTransform(LocalDiffeoTransform):
@@ -29,7 +23,7 @@ class SE3ExpTransform(LocalDiffeoTransform):
         return se3_exp(x)
 
     def _inverse_set(self, y):
-        return self._xset(se3_vee(se3_log(y)))
+        return self._xset(se3_log(y))
 
     def _xset(self, x):
         xset = se3_xset(x, self.k_max)
@@ -65,7 +59,7 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
         return se3_exp(x)
 
     def _inverse_set(self, y):
-        return self._xset(se3_vee(se3_log(y)))
+        return self._xset(se3_log(y))
 
     def _xset(self, x):
         xset = se3_xset(x, 1)
@@ -99,7 +93,7 @@ class SE3ExpBijectiveTransform(Transform):
         return se3_exp(x)
 
     def _inverse(self, y):
-        return se3_vee(se3_log(y))
+        return se3_log(y)
 
     def log_abs_det_jacobian(self, x, y):
         """

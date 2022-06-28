@@ -48,13 +48,14 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
 
     event_dim = 1
 
-    def __init__(self, support_angles: torch.Tensor, axis_angle: bool = False):
+    def __init__(self, support_angles: torch.Tensor, axis_angle: bool = False, k_max: int = 1):
         """
         :param support_angles: support domain of angles in SE(3), shape (N, 3)
         :param axis: axis for axis-angle representation of rotations
         """
         super().__init__()
-        self.support_angles = support_angles
+        self.k_max = k_max
+        self.support_angles = torch.tile(support_angles.unsqueeze(0), (2*self.k_max, 1, 1))
         self.axis_angle = axis_angle
 
     def _call(self, x):
@@ -64,7 +65,7 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
         return self._xset(se3_log(y))
 
     def _xset(self, x):
-        xset = se3_xset(x, 1)
+        xset = se3_xset(x, self.k_max)
         rot_alg = xset[..., 3:]
         
         if self.axis_angle:
@@ -73,6 +74,7 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
         else:
             euler_angles = matrix_to_euler_angles(axis_angle_to_matrix(rot_alg), "XYZ")
             mask = torch.bitwise_and(torch.all(euler_angles < self.support_angles, dim=-1, keepdim=True), torch.all(euler_angles > -self.support_angles, dim=-1, keepdim=True))
+            mask = mask.squeeze(-1)
 
         xset = xset.masked_fill_(~mask[..., None], 0)
         return x, xset, mask

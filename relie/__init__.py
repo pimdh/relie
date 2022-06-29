@@ -13,7 +13,7 @@ from relie.so3_exp_transform import (
 
 from relie.se3_exp_transform import (
     SE3ExpTransform,
-    SE3ExpCompactTransform,
+    RestrictedSE3ExpTransform,
     SE3ExpBijectiveTransform,
 )
 from relie.so3_prior import SO3Prior

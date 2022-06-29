@@ -40,7 +40,7 @@ class SE3ExpTransform(LocalDiffeoTransform):
         return se3_log_abs_det_jacobian(x).float()
 
 
-class SE3ExpCompactTransform(LocalDiffeoTransform):
+class RestrictedSE3ExpTransform(LocalDiffeoTransform):
     """Assumes underlying distribution has support only in the <2pi ball."""
 
     domain = constraints.real

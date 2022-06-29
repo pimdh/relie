@@ -4,7 +4,7 @@ import torch
 from relie import LocalDiffeoTransform
 from relie.utils.se3_tools import se3_exp, se3_log, se3_log_abs_det_jacobian, se3_xset
 from torch.distributions import Transform, constraints
-
+from pytorch3d.transforms import axis_angle_to_matrix, matrix_to_euler_angles
 
 class SE3ExpTransform(LocalDiffeoTransform):
     domain = constraints.real
@@ -48,12 +48,15 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
 
     event_dim = 1
 
-    def __init__(self, support_radius=2 * math.pi):
+    def __init__(self, support_angles: torch.Tensor, axis_angle: bool = False, k_max: int = 1):
         """
-        :param support_radius: radius of inverse set.
+        :param support_angles: support domain of angles in SE(3), shape (N, 3)
+        :param axis: axis for axis-angle representation of rotations
         """
         super().__init__()
-        self.support_radius = support_radius
+        self.k_max = k_max
+        self.support_angles = torch.tile(support_angles.unsqueeze(0), (2*self.k_max, 1, 1))
+        self.axis_angle = axis_angle
 
     def _call(self, x):
         return se3_exp(x)
@@ -62,9 +65,17 @@ class SE3ExpCompactTransform(LocalDiffeoTransform):
         return self._xset(se3_log(y))
 
     def _xset(self, x):
-        xset = se3_xset(x, 1)
-        norms = xset[...,:3].norm(dim=-1)
-        mask = norms < self.support_radius
+        xset = se3_xset(x, self.k_max)
+        rot_alg = xset[..., 3:]
+        
+        if self.axis_angle:
+            norms = rot_alg.norm(dim=-1)
+            mask = norms < self.support_angles.norm(dim=-1)
+        else:
+            euler_angles = matrix_to_euler_angles(axis_angle_to_matrix(rot_alg), "XYZ")
+            mask = torch.bitwise_and(torch.all(euler_angles < self.support_angles, dim=-1, keepdim=True), torch.all(euler_angles > -self.support_angles, dim=-1, keepdim=True))
+            mask = mask.squeeze(-1)
+
         xset = xset.masked_fill_(~mask[..., None], 0)
         return x, xset, mask
 

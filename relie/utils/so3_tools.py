@@ -137,10 +137,12 @@ def so3_xset(x, k_max):
     """
     x = x[None]
     x_norm = x.norm(dim=-1, keepdim=True)
+    non_identity = torch.all(x != 0, dim=-1)
     shape = [-1, *[1] * (x.dim() - 1)]
     k_range = torch.arange(1, k_max + 1, dtype=x.dtype, device=x.device)
     k_range = torch.cat([-k_range, k_range]).view(shape)
-    xset_norm = torch.nan_to_num(x / x_norm)
+    xset_norm = torch.zeros_like(x)
+    xset_norm[non_identity] = x[non_identity] / x_norm[non_identity]
     return xset_norm * (x_norm + 2 * math.pi * k_range)
 
 

@@ -89,7 +89,7 @@ def se3_log(r):
     :return: Algebra element [log_translation, log_rotation] in matrix basis of shape (..., 4, 4)
    
     """
-    return se3_log_map(r, 1e-2, 1e-2)
+    return se3_log_map(r)
 
 
 def se3_inv(x):
